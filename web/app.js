@@ -970,9 +970,11 @@ async function finishGame() {
   if (playerName()) {
     note.textContent = "Submitting to leaderboard…";
     lbSubmit(entry).then((ok) => {
-      note.innerHTML = ok
-        ? `✔ On the leaderboard as <b>${playerName()}</b>`
-        : "⚠ Leaderboard submit failed — open the leaderboard and try Refresh later";
+      if (ok) {
+        note.innerHTML = `✔ On the leaderboard as <b>${playerName()}</b>`;
+      } else {
+        renderSubmitRetry(note, entry);
+      }
     });
   } else {
     note.innerHTML = `<button class="nav-btn" id="join-board">🏆 Join the leaderboard</button>`;
@@ -981,6 +983,25 @@ async function finishGame() {
       goBoard();
     });
   }
+}
+
+function renderSubmitRetry(note, entry) {
+  S.pendingSubmit = entry;
+  note.textContent = "⚠ Leaderboard submit failed — your team is saved locally. ";
+  const btn = document.createElement("button");
+  btn.className = "nav-btn";
+  btn.textContent = "Retry leaderboard submit";
+  btn.addEventListener("click", async () => {
+    note.textContent = "Submitting to leaderboard…";
+    const ok = await lbSubmit(entry);
+    if (ok) {
+      S.pendingSubmit = null;
+      note.innerHTML = `✔ On the leaderboard as <b>${playerName()}</b>`;
+    } else {
+      renderSubmitRetry(note, entry);
+    }
+  });
+  note.appendChild(btn);
 }
 
 /* ---------------- wire-up ---------------- */
@@ -1003,8 +1024,8 @@ async function init() {
     if (!name) return;
     localStorage.setItem(NAME_KEY, name);
     if (S.pendingSubmit) {
-      await lbSubmit(S.pendingSubmit);
-      S.pendingSubmit = null;
+      const ok = await lbSubmit(S.pendingSubmit);
+      if (ok) S.pendingSubmit = null;
     } else {
       // (re)submit all locally saved live-round teams under this name
       for (const h of getHistory().filter(entryInLiveRound)) {
