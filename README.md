@@ -23,6 +23,15 @@ Two competitions (switch with the pills in the top bar):
 The home page shows the current live round with a kick-off deadline and a
 Play button; completed rounds are under the **Practice** tab.
 
+**Shared leaderboard** (🏆 tab): set a name once, and every finished team is
+submitted automatically. Submissions store the *picks*, not the score — every
+viewer's browser recomputes points from the match data, so the board updates
+live as games finish (⏳ marks rounds still in play). Storage is a free
+anonymous key/value service (textdb.online, board id in `app.js`); it's
+trust-based and fine for a friends game, but if the game grows it should move
+to a real backend (e.g. Supabase/Firebase). "Save name" also re-submits all
+locally saved teams under the new name.
+
 Locally: double-click `start.bat`, or run
 `python -m http.server 8317 --directory web` and open http://localhost:8317
 
