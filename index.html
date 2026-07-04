@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin XI — Premier League Wheel Game</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" id="brand-home">
+    <span class="brand-spin">SPIN</span><span class="brand-xi">XI</span>
+    <span class="brand-season"></span>
+  </div>
+  <div class="comp-switch" id="comp-switch"></div>
+  <nav>
+    <button class="nav-btn" id="nav-home">Home</button>
+    <button class="nav-btn" id="nav-new">Practice</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ============ HOME ============ -->
+  <section id="screen-home" class="screen">
+    <div id="live-card" class="live-card"></div>
+    <div class="season-summary" id="season-summary"></div>
+    <div class="history-wrap">
+      <h2>Your Teams</h2>
+      <div id="history-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ SETUP ============ -->
+  <section id="screen-setup" class="screen hidden">
+    <h2 class="setup-step" id="setup-step-gw">1 · Choose a gameweek</h2>
+    <div id="gw-grid" class="gw-grid"></div>
+    <h2 class="setup-step" id="setup-step-formation">2 · Choose your formation</h2>
+    <div id="formation-grid" class="formation-grid"></div>
+    <div class="setup-actions">
+      <button class="big-btn" id="setup-start" disabled>Start Picking →</button>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="screen-game" class="screen hidden">
+    <div class="game-layout">
+      <div class="pitch-col">
+        <div class="game-status" id="game-status"></div>
+        <div class="pitch" id="pitch"></div>
+      </div>
+      <div class="wheel-col">
+        <div class="spinner" id="spinner">
+          <div class="reel-band"></div>
+          <div class="reel-strip" id="reel-strip"></div>
+        </div>
+        <button class="big-btn" id="spin-btn">SPIN</button>
+        <div class="wheel-result" id="wheel-result"></div>
+        <button class="big-btn gold hidden" id="score-btn">🏁 Final Whistle — Score My Team</button>
+        <button class="text-btn" id="abandon-btn">Abandon team</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="screen-results" class="screen hidden">
+    <div class="results-head" id="results-head"></div>
+    <div id="results-list"></div>
+    <div class="results-actions">
+      <button class="big-btn" id="results-again">Play Another Gameweek</button>
+      <button class="nav-btn" id="results-home">Back to Home</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ PLAYER PICKER MODAL ============ -->
+<div id="modal-backdrop" class="hidden">
+  <div id="picker-modal">
+    <div class="picker-head" id="picker-head"></div>
+    <div class="picker-body" id="picker-body"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
