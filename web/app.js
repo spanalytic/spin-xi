@@ -42,7 +42,9 @@ const CAT_LABEL = { GK: "Goalkeeper", DEF: "Defender", MID: "Midfielder", FWD: "
 const GOAL_PTS = { GK: 10, DEF: 6, MID: 5, FWD: 4 };
 const CS_PTS = { GK: 4, DEF: 4, MID: 1, FWD: 0 };
 
-const COMP_IDS = ["epl", "wc2026"];
+const LIVE_SITE_COMP = "wc2026";
+const LIVE_SITE_GW = 5; // World Cup Round of 16
+const COMP_IDS = [LIVE_SITE_COMP];
 const COMP_LABELS = { epl: "Premier League", wc2026: "World Cup 2026" };
 
 const HISTORY_KEY = "spinxi_history_v1";
@@ -50,7 +52,7 @@ const HISTORY_KEY = "spinxi_history_v1";
 /* ---------------- state ---------------- */
 
 const S = {
-  comp: localStorage.getItem("spinxi_comp") || "epl",
+  comp: LIVE_SITE_COMP,
   cores: {},           // comp -> {core, teamsById, playersById, playersByTeam}
   core: null,
   teamsById: {},
@@ -63,6 +65,63 @@ const S = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+/* ---------------- sound ---------------- */
+
+const SOUND = { ctx: null, timers: [] };
+
+function audioCtx() {
+  const Audio = window.AudioContext || window.webkitAudioContext;
+  if (!Audio) return null;
+  if (!SOUND.ctx) SOUND.ctx = new Audio();
+  if (SOUND.ctx.state === "suspended") SOUND.ctx.resume();
+  return SOUND.ctx;
+}
+
+function clearSpinSound() {
+  for (const timer of SOUND.timers) clearTimeout(timer);
+  SOUND.timers = [];
+}
+
+function playTone(freq, duration = 0.04, delay = 0, type = "square", gainLevel = 0.025) {
+  const ctx = audioCtx();
+  if (!ctx) return;
+  const t = ctx.currentTime + delay;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(gainLevel, t + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + duration + 0.02);
+}
+
+function playSpinSound(durationMs) {
+  clearSpinSound();
+  let elapsed = 0;
+  let interval = 45;
+  let tick = 0;
+  const run = () => {
+    playTone(420 + (tick % 6) * 38, 0.028, 0, "square", 0.018);
+    tick++;
+    elapsed += interval;
+    interval = Math.min(170, interval + 6);
+    if (elapsed < durationMs - 180) {
+      const timer = setTimeout(run, interval);
+      SOUND.timers.push(timer);
+    }
+  };
+  run();
+}
+
+function playLandingSound() {
+  clearSpinSound();
+  playTone(520, 0.07, 0, "triangle", 0.035);
+  playTone(780, 0.1, 0.08, "triangle", 0.04);
+}
 
 /* ---------------- data loading ---------------- */
 
@@ -95,6 +154,8 @@ async function loadComp(comp) {
 function renderCompSwitch() {
   const el = $("comp-switch");
   el.innerHTML = "";
+  el.classList.toggle("hidden", COMP_IDS.length < 2);
+  if (COMP_IDS.length < 2) return;
   for (const comp of COMP_IDS) {
     const b = document.createElement("button");
     b.className = "comp-pill" + (comp === S.comp ? " sel" : "");
@@ -198,9 +259,14 @@ function getHistory() {
 function saveHistory(list) { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }
 
 function entryComp(h) { return h.comp || "epl"; }
+function entryInLiveRound(h) {
+  return entryComp(h) === S.comp && (!LIVE_SITE_GW || h.gw === LIVE_SITE_GW);
+}
 
 function liveRound() {
-  return S.core.events.find((e) => !e.finished) || null;
+  return S.core.events.find((e) => e.gw === LIVE_SITE_GW)
+    || S.core.events.find((e) => !e.finished)
+    || null;
 }
 
 function fmtDur(ms) {
@@ -214,17 +280,19 @@ function renderLiveCard() {
   const ev = liveRound();
   if (!ev) {
     lc.innerHTML = `
-      <div class="live-tag done">SEASON COMPLETE</div>
+      <div class="live-tag done">WORLD CUP</div>
       <h1>${S.core.season}</h1>
-      <p class="live-sub">Every round is in the books — replay any gameweek in practice mode.</p>
-      <button class="big-btn" id="live-play">▶ Practice a Gameweek</button>`;
+      <p class="live-sub">Enter a team for the World Cup round.</p>
+      <button class="big-btn" id="live-play">▶ ENTER TEAM</button>`;
     $("live-play").addEventListener("click", () => goSetup());
     return;
   }
   const dl = new Date(ev.deadline);
   const fmt = dl.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const diff = dl - Date.now();
-  const cd = diff > 0 ? `kicks off in ${fmtDur(diff)}` : "round in progress — picks still open";
+  const cd = ev.finished
+    ? "round complete — entries still open"
+    : diff > 0 ? `kicks off in ${fmtDur(diff)}` : "round in progress — entries still open";
   const fx = S.core.fixtures.filter((f) => f.gw === ev.gw);
   const fxHtml = fx.map((f) => {
     const h = S.teamsById[f.h], a = S.teamsById[f.a];
@@ -233,42 +301,35 @@ function renderLiveCard() {
     return `<div class="lf-row"><span class="lf-team">${h ? h.name : "TBC"}</span><span class="lf-mid">${mid}</span><span class="lf-team away">${a ? a.name : "TBC"}</span></div>`;
   }).join("");
   lc.innerHTML = `
-    <div class="live-tag">● LIVE ROUND</div>
-    <h1>${ev.name}</h1>
+    <div class="live-tag">${ev.finished ? "ROUND COMPLETE" : "● LIVE ROUND"}</div>
+    <h1>${COMP_LABELS[S.comp]} ${ev.name}</h1>
     <div class="deadline">⏰ First kick-off ${fmt} <span class="cd">· ${cd}</span></div>
-    <button class="big-btn" id="live-play">▶ PLAY ${(ev.short || "GW " + ev.gw).toUpperCase()}</button>
+    <button class="big-btn" id="live-play">▶ ENTER ${(ev.short || "GW " + ev.gw).toUpperCase()} TEAM</button>
     <div class="live-fixtures">${fxHtml}</div>`;
   $("live-play").addEventListener("click", () => goSetup({ lockedGw: ev.gw }));
 }
 
 function renderHome() {
   renderLiveCard();
-  const all = getHistory().slice().sort((x, y) => y.ts - x.ts);
-  const hist = all.filter((h) => entryComp(h) === S.comp);
-
-  // total = most recent team per gameweek (current competition only)
-  const latestPerGw = {};
-  for (const h of hist) {
-    if (!latestPerGw[h.gw] || h.ts > latestPerGw[h.gw].ts) latestPerGw[h.gw] = h;
-  }
-  const gwsPlayed = Object.keys(latestPerGw).length;
-  const seasonTotal = Object.values(latestPerGw).reduce((s, h) => s + h.score, 0);
+  const hist = getHistory().filter(entryInLiveRound).sort((x, y) => y.ts - x.ts);
+  const entries = hist.length;
+  const latest = hist[0] ? hist[0].score : 0;
   const best = hist.reduce((m, h) => Math.max(m, h.score), 0);
 
-  $("season-summary").innerHTML = gwsPlayed === 0 ? "" : `
-    <div class="stat-card"><div class="num">${seasonTotal}</div><div class="lbl">Total points</div></div>
-    <div class="stat-card"><div class="num">${gwsPlayed}</div><div class="lbl">Rounds played</div></div>
-    <div class="stat-card"><div class="num">${best}</div><div class="lbl">Best round</div></div>`;
+  $("season-summary").innerHTML = entries === 0 ? "" : `
+    <div class="stat-card"><div class="num">${entries}</div><div class="lbl">Entries</div></div>
+    <div class="stat-card"><div class="num">${best}</div><div class="lbl">Best score</div></div>
+    <div class="stat-card"><div class="num">${latest}</div><div class="lbl">Latest score</div></div>`;
 
   const list = $("history-list");
-  if (all.length === 0) {
+  if (hist.length === 0) {
     list.innerHTML = `<div class="history-empty">No teams yet — spin up your first XI!</div>`;
     return;
   }
   list.innerHTML = "";
-  for (const h of all) {
+  for (const h of hist) {
     const row = document.createElement("div");
-    row.className = "history-row" + (entryComp(h) === S.comp ? "" : " othercomp");
+    row.className = "history-row";
     const date = new Date(h.ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     row.innerHTML = `
       <div class="history-gw">${h.label || "GW " + h.gw}</div>
@@ -406,10 +467,10 @@ function renderGameStatus() {
     $("spin-btn").disabled = true;
     if (!S.game.captain) {
       $("score-btn").classList.add("hidden");
-      $("wheel-result").innerHTML = `<b>Team complete!</b> Tap a player on the pitch to hand them the captain's armband — their points count double.`;
+      $("wheel-result").innerHTML = `<b>Team complete!</b> Pick your captain by tapping a player on the pitch. You can change captain before you enter your team.`;
     } else {
       $("score-btn").classList.remove("hidden");
-      $("wheel-result").innerHTML = `<b>${S.playersById[S.game.captain].name}</b> wears the armband. Ready for the final whistle!`;
+      $("wheel-result").innerHTML = `<b>${S.playersById[S.game.captain].name}</b> is captain. Tap another player to change before you enter your team.`;
     }
   }
 }
@@ -432,14 +493,19 @@ function renderPitch() {
     el.style.top = slot.y + "%";
     if (slot.player) {
       const isCap = S.game.captain === slot.player.id;
+      const pickingCaptain = filledCount() === 11;
+      if (pickingCaptain) {
+        el.classList.add("cap-select");
+        if (isCap) el.classList.add("cap-picked");
+        if (!S.game.captain) el.classList.add("cap-prompt");
+      }
       el.innerHTML = `
         ${isCap ? '<div class="cap-badge">C</div>' : ""}
         <div class="disc">${faceImg(slot.player, "")}</div>
         <div class="nameplate">${slot.player.name}</div>
         <div class="roleplate">${ROLES[slot.role].cat}</div>`;
-      // captain is picked once the XI is complete, then locked in
-      if (filledCount() === 11 && !S.game.captain) {
-        el.classList.add("cap-select");
+      if (pickingCaptain) {
+        el.title = isCap ? "Captain selected" : "Pick as captain";
         el.addEventListener("click", () => {
           S.game.captain = slot.player.id;
           renderPitch();
@@ -491,6 +557,8 @@ function spinWheel() {
   S.wheel.spinning = true;
   $("spin-btn").disabled = true;
   $("wheel-result").innerHTML = "";
+  const dur = 3000;
+  playSpinSound(dur);
 
   const teams = wheelTeams();
   const target = teams[Math.floor(Math.random() * teams.length)];
@@ -515,7 +583,6 @@ function spinWheel() {
 
   // scroll so the winner ends up in the centre band (row 2 of 3 visible)
   const yFinal = (targetIdx - 1) * REEL_ROW_H;
-  const dur = 3000;
   const t0 = performance.now();
   let done = false;
 
@@ -533,6 +600,7 @@ function spinWheel() {
     box.classList.remove("spinning", "blur");
     box.classList.add("landed");
     box.style.setProperty("--team-color", target.color || "#00e5ff");
+    playLandingSound();
     const rowEl = strip.children[targetIdx];
     rowEl.innerHTML = `<img class="reel-badge" src="${target.badge || ""}"
       onerror="this.style.display='none'"><b>${target.name}</b>`;
@@ -687,6 +755,14 @@ function playerName() { return localStorage.getItem(NAME_KEY) || ""; }
 function playerSlug(name) {
   return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20);
 }
+function lbEntryKey(entry) {
+  return entry.id || `${entry.comp}|${entry.gw}|${entry.ts || ""}|${(entry.picks || []).join(",")}|${entry.captain || ""}`;
+}
+function entryTimeLabel(ts) {
+  return ts
+    ? new Date(ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    : "";
+}
 
 async function lbRead(key) {
   try {
@@ -703,15 +779,16 @@ async function lbWrite(key, obj) {
   await fetch(LB.write, { method: "POST", body });
 }
 
-// submit/replace this player's entry for a round (fire-and-forget safe)
+// submit this team entry; repeat entries are allowed, exact resubmits are replaced
 async function lbSubmit(entry) {
   const name = playerName();
   if (!name) return false;
   const slug = playerSlug(name);
   try {
     const mine = (await lbRead(`p_${slug}`)) || { name, entries: [] };
+    const entryKey = lbEntryKey(entry);
     mine.name = name;
-    mine.entries = mine.entries.filter((e) => !(e.comp === entry.comp && e.gw === entry.gw));
+    mine.entries = mine.entries.filter((e) => lbEntryKey(e) !== entryKey);
     mine.entries.push(entry);
     await lbWrite(`p_${slug}`, mine);
     const members = (await lbRead("members")) || [];
@@ -749,42 +826,49 @@ async function renderBoard() {
   body.innerHTML = `<div class="history-empty">Loading leaderboard…</div>`;
   const members = (await lbRead("members")) || [];
   if (members.length === 0) {
-    body.innerHTML = `<div class="history-empty">Nobody on the board yet — finish a team to join!</div>`;
+    body.innerHTML = `<div class="history-empty">Nobody on the board yet — finish a team to join, even while scores are still 0.</div>`;
     return;
   }
   const playersData = (await Promise.all(members.map((m) => lbRead(`p_${m}`)))).filter(Boolean);
 
   const rows = [];
   for (const pd of playersData) {
-    const entries = (pd.entries || []).filter((e) => e.comp === S.comp);
-    if (!entries.length) continue;
-    const perGw = [];
-    let total = 0, anyPending = false;
-    for (const e of entries.sort((a, b) => a.gw - b.gw)) {
+    const entries = (pd.entries || []).filter(entryInLiveRound);
+    for (const e of entries) {
       const stats = await loadGwStats(e.gw);
       const sc = computeEntryScore(e, stats);
-      perGw.push({ label: e.label || "GW " + e.gw, pts: sc.total, pending: sc.pending });
-      total += sc.total;
-      anyPending = anyPending || sc.pending;
+      rows.push({ name: pd.name || "Player", entry: e, total: sc.total, pending: sc.pending });
     }
-    rows.push({ name: pd.name, total, perGw, anyPending });
   }
   if (!rows.length) {
-    body.innerHTML = `<div class="history-empty">No ${COMP_LABELS[S.comp]} teams on the board yet.</div>`;
+    body.innerHTML = `<div class="history-empty">No R16 teams on the board yet — enter a team to join, even while scores are still 0.</div>`;
     return;
   }
-  rows.sort((a, b) => b.total - a.total);
+  rows.sort((a, b) =>
+    b.total - a.total
+    || (a.pending === b.pending ? 0 : a.pending ? 1 : -1)
+    || (a.entry.ts || 0) - (b.entry.ts || 0));
   const me = playerName();
-  body.innerHTML = rows.map((r, i) => `
-    <div class="board-row${r.name === me ? " me" : ""}">
-      <div class="board-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</div>
-      <div class="board-player">
-        <div class="board-pname">${r.name}</div>
-        <div class="board-chips">${r.perGw.map((g) =>
-          `<span class="bchip${g.pending ? " pend" : ""}">${g.label}: ${g.pts}${g.pending ? " ⏳" : ""}</span>`).join("")}</div>
-      </div>
-      <div class="board-total">${r.total}${r.anyPending ? '<span class="board-live">live</span>' : ""}</div>
-    </div>`).join("");
+  const seen = {};
+  body.innerHTML = rows.map((r, i) => {
+    const count = (seen[r.name] = (seen[r.name] || 0) + 1);
+    const name = count > 1 ? `${r.name} #${count}` : r.name;
+    const label = r.entry.label || "GW " + r.entry.gw;
+    const time = entryTimeLabel(r.entry.ts);
+    return `
+      <div class="board-row${r.name === me ? " me" : ""}">
+        <div class="board-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</div>
+        <div class="board-player">
+          <div class="board-pname">${name}</div>
+          <div class="board-chips">
+            <span class="bchip${r.pending ? " pend" : ""}">${label}: ${r.total}${r.pending ? " ⏳" : ""}</span>
+            <span class="bchip">${r.entry.formation || "Formation"}</span>
+            ${time ? `<span class="bchip">${time}</span>` : ""}
+          </div>
+        </div>
+        <div class="board-total">${r.total}${r.pending ? '<span class="board-live">live</span>' : ""}</div>
+      </div>`;
+  }).join("");
 }
 
 function goBoard() { renderBoard(); show("screen-board"); }
@@ -845,8 +929,10 @@ function renderResults(game, stats, opts = {}) {
 async function finishGame() {
   const stats = await loadGwStats(S.game.gw);
   const total = renderResults(S.game, stats);
+  const entryId = Date.now() + "-" + Math.random().toString(36).slice(2, 7);
 
   const entry = {
+    id: entryId,
     comp: S.comp,
     label: gwLabel(S.game.gw),
     gw: S.game.gw,
@@ -857,7 +943,7 @@ async function finishGame() {
   };
   const hist = getHistory();
   hist.push({
-    id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+    id: entryId,
     ts: entry.ts,
     score: total,
     ...entry,
@@ -866,7 +952,7 @@ async function finishGame() {
   S.game = null;
   show("screen-results");
 
-  // share to the leaderboard (latest team per round counts)
+  // share this team to the leaderboard
   const note = document.createElement("div");
   note.className = "submit-note";
   $("results-head").appendChild(note);
@@ -889,7 +975,10 @@ async function finishGame() {
 /* ---------------- wire-up ---------------- */
 
 function goHome() { renderHome(); show("screen-home"); }
-function goSetup(opts) { renderSetup(opts); show("screen-setup"); }
+function goSetup(opts = {}) {
+  renderSetup({ ...opts, lockedGw: opts.lockedGw || LIVE_SITE_GW });
+  show("screen-setup");
+}
 
 async function init() {
   await loadComp(S.comp);
@@ -906,15 +995,19 @@ async function init() {
       await lbSubmit(S.pendingSubmit);
       S.pendingSubmit = null;
     } else {
-      // (re)submit all locally saved teams under this name
-      const latest = {};
-      for (const h of getHistory()) {
-        const k = `${entryComp(h)}|${h.gw}`;
-        if (!latest[k] || h.ts > latest[k].ts) latest[k] = h;
-      }
-      for (const h of Object.values(latest)) {
+      // (re)submit all locally saved live-round teams under this name
+      for (const h of getHistory().filter(entryInLiveRound)) {
         if (!h.picks) continue;
-        await lbSubmit({ comp: entryComp(h), label: h.label, gw: h.gw, formation: h.formation, picks: h.picks, captain: h.captain, ts: h.ts });
+        await lbSubmit({
+          id: h.id,
+          comp: entryComp(h),
+          label: h.label,
+          gw: h.gw,
+          formation: h.formation,
+          picks: h.picks,
+          captain: h.captain,
+          ts: h.ts,
+        });
       }
     }
     renderBoard();

@@ -220,7 +220,13 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
   border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.4);
 }
 .slot.cap-select { cursor: pointer; }
-.slot.cap-select .disc { animation: pulse 1s infinite; border-color: var(--gold); }
+.slot.cap-select .disc { border-color: rgba(255, 210, 74, 0.8); cursor: pointer; }
+.slot.cap-select:hover .disc { box-shadow: 0 0 0 6px rgba(255, 210, 74, 0.28); }
+.slot.cap-select.cap-prompt .disc { animation: pulse 1s infinite; border-color: var(--gold); }
+.slot.cap-select.cap-picked .disc {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 5px rgba(255, 210, 74, 0.35);
+}
 .cap-tag {
   display: inline-block; background: var(--gold); color: #3a2c00;
   font-weight: 900; font-size: 10px; border-radius: 4px;
