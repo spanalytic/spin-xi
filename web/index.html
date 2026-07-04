@@ -36,6 +36,14 @@
 
   <!-- ============ SETUP ============ -->
   <section id="screen-setup" class="screen hidden">
+    <div id="name-gate" class="name-gate hidden">
+      <h2>👋 Welcome! What should we call you?</h2>
+      <p>Your display name goes on the 🏆 leaderboard with every team you enter.</p>
+      <div class="name-gate-row">
+        <input id="gate-name" maxlength="20" placeholder="Your name">
+        <button class="big-btn" id="gate-continue">Continue →</button>
+      </div>
+    </div>
     <h2 class="setup-step" id="setup-step-gw">1 · Choose a gameweek</h2>
     <div id="gw-grid" class="gw-grid"></div>
     <h2 class="setup-step" id="setup-step-formation">2 · Choose your formation</h2>

@@ -388,6 +388,21 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
 .result-pts.zero { color: var(--muted); }
 .results-actions { text-align: center; margin-top: 24px; display: flex; gap: 14px; justify-content: center; }
 
+/* ---------- first-visit name gate ---------- */
+.name-gate {
+  background: linear-gradient(135deg, #182042, var(--panel));
+  border: 1px solid var(--line); border-radius: 18px;
+  padding: 34px 26px; text-align: center; margin: 20px auto; max-width: 460px;
+}
+.name-gate h2 { font-size: 24px; margin-bottom: 8px; }
+.name-gate p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+.name-gate-row { display: flex; gap: 10px; justify-content: center; }
+#gate-name {
+  background: var(--bg); border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 12px 14px; font-size: 16px; width: 200px;
+}
+#gate-name:focus { outline: none; border-color: var(--accent); }
+
 /* ---------- captain banner ---------- */
 .captain-banner {
   text-align: center; margin: 0 0 12px;

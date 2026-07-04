@@ -363,8 +363,23 @@ async function viewHistoryEntry(h) {
 /* ---------------- setup ---------------- */
 
 function renderSetup(opts = {}) {
+  S.setupOpts = opts;
   const locked = !!opts.lockedGw;
   S.setup = { gw: opts.lockedGw || null, formation: null };
+
+  // first visit: ask for a display name before anything else
+  const needName = !playerName();
+  $("name-gate").classList.toggle("hidden", !needName);
+  $("setup-step-formation").classList.toggle("hidden", needName);
+  $("formation-grid").classList.toggle("hidden", needName);
+  document.querySelector(".setup-actions").classList.toggle("hidden", needName);
+  if (needName) {
+    $("setup-step-gw").classList.add("hidden");
+    $("gw-grid").classList.add("hidden");
+    setTimeout(() => $("gate-name").focus(), 100);
+    return;
+  }
+
   $("setup-step-gw").classList.toggle("hidden", locked);
   $("gw-grid").classList.toggle("hidden", locked);
   $("setup-step-formation").textContent = locked
@@ -1191,6 +1206,15 @@ async function init() {
     renderBoard();
   });
   $("setup-start").addEventListener("click", startGame);
+  $("gate-continue").addEventListener("click", () => {
+    const name = $("gate-name").value.trim();
+    if (!name) { $("gate-name").focus(); return; }
+    localStorage.setItem(NAME_KEY, name);
+    renderSetup(S.setupOpts || {});
+  });
+  $("gate-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("gate-continue").click();
+  });
   // keep the live-round countdown fresh while the home screen is visible
   setInterval(() => {
     if (S.core && !$("screen-home").classList.contains("hidden")) renderLiveCard();
