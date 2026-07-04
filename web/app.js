@@ -750,18 +750,83 @@ const LB = {
   board: "spinxi26_b7wq4x9r",
 };
 const NAME_KEY = "spinxi_player_name";
+const NAME_SLUG_KEY = "spinxi_player_slug";
+const PENDING_SUBMITS_KEY = "spinxi_pending_submits_v1";
 
 function playerName() { return localStorage.getItem(NAME_KEY) || ""; }
 function playerSlug(name) {
   return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20);
 }
+function storedPlayerSlug() {
+  return localStorage.getItem(NAME_SLUG_KEY) || playerSlug(playerName());
+}
+function ensurePlayerSlug(name) {
+  let slug = playerSlug(name);
+  if (!slug) slug = storedPlayerSlug();
+  if (!slug) slug = "player" + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem(NAME_SLUG_KEY, slug);
+  return slug;
+}
 function lbEntryKey(entry) {
   return entry.id || `${entry.comp}|${entry.gw}|${entry.ts || ""}|${(entry.picks || []).join(",")}|${entry.captain || ""}`;
+}
+function normaliseEntry(entry) {
+  return {
+    id: entry.id,
+    comp: entry.comp,
+    label: entry.label,
+    gw: entry.gw,
+    formation: entry.formation,
+    picks: entry.picks,
+    captain: entry.captain,
+    ts: entry.ts,
+  };
 }
 function entryTimeLabel(ts) {
   return ts
     ? new Date(ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
     : "";
+}
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[ch]);
+}
+function getPendingSubmits() {
+  try { return JSON.parse(localStorage.getItem(PENDING_SUBMITS_KEY)) || []; }
+  catch { return []; }
+}
+function savePendingSubmits(list) {
+  localStorage.setItem(PENDING_SUBMITS_KEY, JSON.stringify(list));
+}
+function queuePendingSubmit(entry) {
+  const pending = getPendingSubmits();
+  const key = lbEntryKey(entry);
+  if (!pending.some((e) => lbEntryKey(e) === key)) {
+    pending.push(normaliseEntry(entry));
+    savePendingSubmits(pending);
+  }
+}
+function removePendingSubmit(entry) {
+  const key = lbEntryKey(entry);
+  savePendingSubmits(getPendingSubmits().filter((e) => lbEntryKey(e) !== key));
+}
+function playerRecord(raw, name = "") {
+  const record = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw
+    : { name, entries: [] };
+  record.name = record.name || name;
+  record.entries = Array.isArray(record.entries) ? record.entries.filter(Boolean) : [];
+  return record;
+}
+function mergeEntries(entries) {
+  const byKey = {};
+  for (const entry of entries.filter(Boolean)) byKey[lbEntryKey(entry)] = normaliseEntry(entry);
+  return Object.values(byKey).sort((a, b) => (a.ts || 0) - (b.ts || 0));
 }
 
 async function lbRead(key) {
@@ -789,29 +854,78 @@ async function lbWrite(key, obj) {
 async function lbSubmit(entry) {
   const name = playerName();
   if (!name) return false;
-  const slug = playerSlug(name);
+  const slug = ensurePlayerSlug(name);
   try {
-    const rawMine = await lbRead(`p_${slug}`);
-    const mine = rawMine && typeof rawMine === "object" && !Array.isArray(rawMine)
-      ? rawMine
-      : { name, entries: [] };
+    const mine = playerRecord(await lbRead(`p_${slug}`), name);
     const entryKey = lbEntryKey(entry);
     mine.name = name;
-    mine.entries = Array.isArray(mine.entries) ? mine.entries : [];
     mine.entries = mine.entries.filter((e) => lbEntryKey(e) !== entryKey);
-    mine.entries.push(entry);
+    mine.entries.push(normaliseEntry(entry));
     await lbWrite(`p_${slug}`, mine);
-    const membersRaw = await lbRead("members");
-    const members = Array.isArray(membersRaw) ? membersRaw : [];
-    if (!members.includes(slug)) {
-      members.push(slug);
-      await lbWrite("members", members);
-    }
+    await lbUpdateMembers({ add: slug });
+    removePendingSubmit(entry);
     return true;
   } catch (e) {
     console.warn("leaderboard submit failed", e);
     return false;
   }
+}
+
+async function lbUpdateMembers({ add, remove } = {}) {
+  const membersRaw = await lbRead("members");
+  const members = Array.isArray(membersRaw) ? membersRaw.filter(Boolean) : [];
+  const next = members.filter((slug, index) => members.indexOf(slug) === index && slug !== remove);
+  if (add && !next.includes(add)) next.push(add);
+  await lbWrite("members", next);
+}
+
+async function lbSavePlayerName(name) {
+  const previousName = playerName();
+  const previousSlug = storedPlayerSlug();
+  const nextSlug = ensurePlayerSlug(name);
+  localStorage.setItem(NAME_KEY, name);
+  localStorage.setItem(NAME_SLUG_KEY, nextSlug);
+
+  if (previousSlug && previousSlug !== nextSlug) {
+    await lbMigrateLocalEntries(previousSlug, nextSlug, name, previousName);
+  }
+  return true;
+}
+
+async function lbMigrateLocalEntries(previousSlug, nextSlug, nextName, previousName) {
+  try {
+    const localKeys = new Set(getHistory().filter(entryInLiveRound).map(lbEntryKey));
+    for (const entry of getPendingSubmits()) localKeys.add(lbEntryKey(entry));
+    if (!localKeys.size) {
+      await lbUpdateMembers({ add: nextSlug, remove: previousSlug });
+      return;
+    }
+
+    const previous = playerRecord(await lbRead(`p_${previousSlug}`), previousName);
+    const next = playerRecord(await lbRead(`p_${nextSlug}`), nextName);
+    const moving = previous.entries.filter((entry) => localKeys.has(lbEntryKey(entry)));
+    const remaining = previous.entries.filter((entry) => !localKeys.has(lbEntryKey(entry)));
+
+    next.name = nextName;
+    next.entries = mergeEntries([...next.entries, ...moving]);
+    await lbWrite(`p_${nextSlug}`, next);
+
+    previous.entries = remaining;
+    await lbWrite(`p_${previousSlug}`, previous);
+    await lbUpdateMembers({ add: nextSlug, remove: remaining.length ? null : previousSlug });
+  } catch (e) {
+    console.warn("leaderboard name migration failed", e);
+  }
+}
+
+async function retryPendingSubmits() {
+  if (!playerName()) return true;
+  let allOk = true;
+  for (const entry of getPendingSubmits()) {
+    const ok = await lbSubmit(entry);
+    allOk = allOk && ok;
+  }
+  return allOk;
 }
 
 // score an entry with the viewer's current data (captain doubled, pending-aware)
@@ -832,6 +946,7 @@ function computeEntryScore(entry, stats) {
 }
 
 async function renderBoard() {
+  await retryPendingSubmits();
   $("board-name").value = playerName();
   const body = $("board-body");
   body.innerHTML = `<div class="history-empty">Loading leaderboard…</div>`;
@@ -842,15 +957,24 @@ async function renderBoard() {
   }
   const playersData = (await Promise.all(members.map((m) => lbRead(`p_${m}`)))).filter(Boolean);
 
-  const rows = [];
+  const rowsByKey = {};
+  const me = playerName();
   for (const pd of playersData) {
     const entries = (pd.entries || []).filter(entryInLiveRound);
     for (const e of entries) {
       const stats = await loadGwStats(e.gw);
       const sc = computeEntryScore(e, stats);
-      rows.push({ name: pd.name || "Player", entry: e, total: sc.total, pending: sc.pending });
+      const row = { name: pd.name || "Player", entry: e, total: sc.total, pending: sc.pending };
+      const key = lbEntryKey(e);
+      const prev = rowsByKey[key];
+      const entryTs = e.ts || 0;
+      const prevTs = prev?.entry?.ts || 0;
+      if (!prev || (row.name === me && prev.name !== me) || entryTs >= prevTs) {
+        rowsByKey[key] = row;
+      }
     }
   }
+  const rows = Object.values(rowsByKey);
   if (!rows.length) {
     body.innerHTML = `<div class="history-empty">No R16 teams on the board yet — enter a team to join, even while scores are still 0.</div>`;
     return;
@@ -859,27 +983,45 @@ async function renderBoard() {
     b.total - a.total
     || (a.pending === b.pending ? 0 : a.pending ? 1 : -1)
     || (a.entry.ts || 0) - (b.entry.ts || 0));
-  const me = playerName();
   const seen = {};
-  body.innerHTML = rows.map((r, i) => {
+  body.innerHTML = "";
+  rows.forEach((r, i) => {
     const count = (seen[r.name] = (seen[r.name] || 0) + 1);
     const name = count > 1 ? `${r.name} #${count}` : r.name;
     const label = r.entry.label || "GW " + r.entry.gw;
     const time = entryTimeLabel(r.entry.ts);
-    return `
-      <div class="board-row${r.name === me ? " me" : ""}">
-        <div class="board-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</div>
-        <div class="board-player">
-          <div class="board-pname">${name}</div>
-          <div class="board-chips">
-            <span class="bchip${r.pending ? " pend" : ""}">${label}: ${r.total}${r.pending ? " ⏳" : ""}</span>
-            <span class="bchip">${r.entry.formation || "Formation"}</span>
-            ${time ? `<span class="bchip">${time}</span>` : ""}
-          </div>
+    const row = document.createElement("div");
+    row.className = "board-row" + (r.name === me ? " me" : "");
+    row.title = "View team";
+    row.innerHTML = `
+      <div class="board-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</div>
+      <div class="board-player">
+        <div class="board-pname">${escapeHtml(name)}</div>
+        <div class="board-chips">
+          <span class="bchip${r.pending ? " pend" : ""}">${escapeHtml(label)}: ${r.total}${r.pending ? " ⏳" : ""}</span>
+          <span class="bchip">${escapeHtml(r.entry.formation || "Formation")}</span>
+          ${time ? `<span class="bchip">${escapeHtml(time)}</span>` : ""}
         </div>
-        <div class="board-total">${r.total}${r.pending ? '<span class="board-live">live</span>' : ""}</div>
-      </div>`;
-  }).join("");
+      </div>
+      <div class="board-total">${r.total}${r.pending ? '<span class="board-live">live</span>' : ""}</div>`;
+    row.addEventListener("click", () => viewBoardEntry(r.entry, r.name));
+    body.appendChild(row);
+  });
+}
+
+async function viewBoardEntry(entry, name) {
+  if (entryComp(entry) !== S.comp) await loadComp(entryComp(entry));
+  const stats = await loadGwStats(entry.gw);
+  const formation = FORMATIONS[entry.formation] || FORMATIONS["4-3-3"];
+  const slots = formation.map(([role, x, y], i) => ({
+    role, x, y, player: S.playersById[entry.picks?.[i]] || null,
+  }));
+  renderResults(
+    { gw: entry.gw, formation: entry.formation, slots, captain: entry.captain },
+    stats,
+    { readonly: true, ownerName: name },
+  );
+  show("screen-results");
 }
 
 function goBoard() { renderBoard(); show("screen-board"); }
@@ -907,6 +1049,7 @@ function renderResults(game, stats, opts = {}) {
   $("results-head").innerHTML = `
     <div class="total">${total} pts</div>
     <div class="sub">${gwLabel(game.gw)} &middot; <span class="formation-tag">${game.formation}</span>
+      ${opts.ownerName ? `&middot; ${escapeHtml(opts.ownerName)}'s team` : ""}
       ${opts.readonly ? "&middot; saved team" : ""}
       ${stillToPlay ? `&middot; <span class="pending-note">⏳ ${stillToPlay} player${stillToPlay > 1 ? "s" : ""} still to play — score will update</span>` : ""}</div>`;
 
@@ -968,6 +1111,7 @@ async function finishGame() {
   note.className = "submit-note";
   $("results-head").appendChild(note);
   if (playerName()) {
+    queuePendingSubmit(entry);
     note.textContent = "Submitting to leaderboard…";
     lbSubmit(entry).then((ok) => {
       if (ok) {
@@ -1022,26 +1166,26 @@ async function init() {
   $("board-name-save").addEventListener("click", async () => {
     const name = $("board-name").value.trim();
     if (!name) return;
-    localStorage.setItem(NAME_KEY, name);
+    await lbSavePlayerName(name);
     if (S.pendingSubmit) {
-      const ok = await lbSubmit(S.pendingSubmit);
-      if (ok) S.pendingSubmit = null;
-    } else {
-      // (re)submit all locally saved live-round teams under this name
-      for (const h of getHistory().filter(entryInLiveRound)) {
-        if (!h.picks) continue;
-        await lbSubmit({
-          id: h.id,
-          comp: entryComp(h),
-          label: h.label,
-          gw: h.gw,
-          formation: h.formation,
-          picks: h.picks,
-          captain: h.captain,
-          ts: h.ts,
-        });
-      }
+      queuePendingSubmit(S.pendingSubmit);
+      S.pendingSubmit = null;
     }
+    // (re)submit all locally saved live-round teams under this name
+    for (const h of getHistory().filter(entryInLiveRound)) {
+      if (!h.picks) continue;
+      queuePendingSubmit({
+        id: h.id,
+        comp: entryComp(h),
+        label: h.label,
+        gw: h.gw,
+        formation: h.formation,
+        picks: h.picks,
+        captain: h.captain,
+        ts: h.ts,
+      });
+    }
+    await retryPendingSubmits();
     renderBoard();
   });
   $("setup-start").addEventListener("click", startGame);
