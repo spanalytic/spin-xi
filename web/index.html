@@ -18,6 +18,7 @@
     <button class="nav-btn" id="nav-home">Home</button>
     <button class="nav-btn" id="nav-new">Play R16</button>
     <button class="nav-btn" id="nav-board">🏆 Leaderboard</button>
+    <button class="nav-btn" id="nav-howto">❓ How to Play</button>
   </nav>
 </header>
 
@@ -49,6 +50,7 @@
     <div class="game-layout">
       <div class="pitch-col">
         <div class="game-status" id="game-status"></div>
+        <div id="captain-banner" class="captain-banner hidden">👑 Pick a Captain to score DOUBLE points</div>
         <div class="pitch" id="pitch"></div>
       </div>
       <div class="wheel-col">
@@ -75,6 +77,59 @@
       </div>
     </div>
     <div id="board-body"></div>
+  </section>
+
+  <!-- ============ HOW TO PLAY ============ -->
+  <section id="screen-howto" class="screen hidden">
+    <h2 class="howto-title">📖 How to Play</h2>
+    <div class="howto-grid">
+      <div class="howto-card">
+        <h3>1 · Spin &amp; pick your XI</h3>
+        <ol>
+          <li>Hit <b>Play</b> on the live round and choose a formation.</li>
+          <li><b>SPIN</b> the reel — it lands on a random team. Teams can come up more than once.</li>
+          <li>Pick any player from that team — they fill the next open slot for their position
+              (GK / DEF / MID / FWD). Each player can only be picked once.</li>
+          <li>Nobody fits your remaining slots? Spin again.</li>
+          <li>Repeat until your XI is complete.</li>
+        </ol>
+      </div>
+      <div class="howto-card">
+        <h3>2 · Captain &amp; enter</h3>
+        <ol>
+          <li>Tap a player on the pitch to make them <b>captain</b> — they score
+              <b>double points</b> (negatives too!). You can change your mind until you enter the team.</li>
+          <li><b>Enter my Team</b> saves it and posts it to the 🏆 Leaderboard under your name
+              (set your name on the Leaderboard tab first).</li>
+          <li>Enter as many teams as you like — every team goes on the board.</li>
+          <li>Points appear as the real matches finish — ⏳ means games are still to be played
+              and the score will keep updating.</li>
+        </ol>
+      </div>
+    </div>
+    <h3 class="howto-sub">Scoring</h3>
+    <table class="score-table">
+      <tr><th>Action</th><th>Points</th></tr>
+      <tr><td>Playing up to 60 minutes</td><td>1</td></tr>
+      <tr><td>Playing 60 minutes or more</td><td>2</td></tr>
+      <tr><td>Goal by a goalkeeper / defender / midfielder / forward</td><td>10 / 6 / 5 / 4</td></tr>
+      <tr><td>Assist</td><td>3</td></tr>
+      <tr><td>Clean sheet — goalkeeper or defender (60+ mins)</td><td>4</td></tr>
+      <tr><td>Clean sheet — midfielder</td><td>1</td></tr>
+      <tr><td>Every 3 saves by a goalkeeper</td><td>1</td></tr>
+      <tr><td>Penalty save</td><td>5</td></tr>
+      <tr><td>Penalty miss</td><td>-2</td></tr>
+      <tr><td>Every 2 goals conceded — goalkeeper or defender</td><td>-1</td></tr>
+      <tr><td>Defensive contribution — 10+ clearances, interceptions &amp; tackles (defender)
+          or 12+ incl. recoveries (midfielder / forward)</td><td>2</td></tr>
+      <tr><td>Bonus — the 3 best-rated players in each match</td><td>3 / 2 / 1</td></tr>
+      <tr><td>Yellow card</td><td>-1</td></tr>
+      <tr><td>Red card</td><td>-3</td></tr>
+      <tr><td>Own goal</td><td>-2</td></tr>
+      <tr><td><b>Captain</b> — all points doubled</td><td>×2</td></tr>
+    </table>
+    <p class="howto-note">Player positions (GK / DEF / MID / FWD) reflect where each player has
+      actually been playing. Extra time in knockout games counts; penalty shootouts don't.</p>
   </section>
 
   <!-- ============ RESULTS ============ -->
