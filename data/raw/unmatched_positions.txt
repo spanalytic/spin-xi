@@ -1,0 +1,93 @@
+Hein | Karl Hein | Arsenal | type=1 | mins=0
+Fábio Vieira | Fábio Ferreira Vieira | Arsenal | type=3 | mins=0
+Sambi | Albert Sambi Lokonga | Arsenal | type=3 | mins=0
+Marschall | Filip Marschall | Aston Villa | type=1 | mins=0
+Sousa | Lino da Cruz Sousa | Aston Villa | type=2 | mins=0
+Yasin | Yasin Özcan | Aston Villa | type=2 | mins=0
+Barrenechea | Enzo Barrenechea | Aston Villa | type=3 | mins=0
+Dobbin | Lewis Dobbin | Aston Villa | type=3 | mins=0
+Dendoncker | Leander Dendoncker | Aston Villa | type=3 | mins=0
+Redmond | Zépiqueno Redmond | Aston Villa | type=4 | mins=0
+Green | Etienne Green | Burnley | type=1 | mins=0
+Hladký | Václav Hladký | Burnley | type=1 | mins=0
+Delcroix | Hannes Delcroix | Burnley | type=2 | mins=0
+Dodgson | Owen Dodgson | Burnley | type=2 | mins=0
+Jordan | Jordan Beyer | Burnley | type=2 | mins=0
+Sambo | Shurandy Sambo | Burnley | type=2 | mins=0
+Benson | Manuel Benson Hedilazio | Burnley | type=3 | mins=0
+Churlinov | Darko Churlinov | Burnley | type=3 | mins=0
+Koleosho | Luca Koleosho | Burnley | type=3 | mins=0
+Adewumi | Oluwaseun Adewumi | Burnley | type=3 | mins=0
+Obafemi | Michael Obafemi | Burnley | type=4 | mins=0
+Paulsen | Alex Paulsen | Bournemouth | type=1 | mins=0
+Bevan | Owen Bevan | Bournemouth | type=2 | mins=0
+Mepham | Chris Mepham | Bournemouth | type=2 | mins=0
+Rees-Dottin | Remy Rees-Dottin | Bournemouth | type=3 | mins=0
+DaCosta | Malcom DaCosta | Bournemouth | type=3 | mins=0
+Stevens | Charlie Stevens | Bournemouth | type=3 | mins=0
+Cox | Matthew Cox | Brentford | type=1 | mins=0
+Eyestone | Julian Eyestone | Brentford | type=1 | mins=0
+Bentt | Luka Bentt | Brentford | type=3 | mins=0
+Shield | Ollie Shield | Brentford | type=2 | mins=0
+Stephenson | Joshua Stephenson | Brentford | type=2 | mins=0
+McManus | Conor McManus | Brentford | type=2 | mins=0
+Owen | Riley Owen | Brentford | type=3 | mins=0
+McGill | Tom McGill | Brighton | type=1 | mins=0
+Scherpen | Kjell Scherpen | Brighton | type=1 | mins=0
+Sima | Abdallah Sima | Brighton | type=3 | mins=0
+Yalcouye | Malick Yalcouyé | Brighton | type=3 | mins=0
+Mazilu | Adrian Mazilu | Brighton | type=3 | mins=0
+Moran | Andrew Moran | Brighton | type=3 | mins=0
+Penders | Mike Penders | Chelsea | type=1 | mins=0
+Paez | Kendry Páez Andrade | Chelsea | type=3 | mins=0
+Eboué | Mathis Eboué | Chelsea | type=3 | mins=0
+Ebiowei | Malcolm Ebiowei | Crystal Palace | type=3 | mins=0
+Ozoh | David Ozoh | Crystal Palace | type=3 | mins=0
+Harris | Luke Harris | Fulham | type=3 | mins=0
+Cairns | Alex Cairns | Leeds | type=1 | mins=0
+Schmidt | Isaac Schmidt | Leeds | type=2 | mins=0
+Greenwood | Sam Greenwood | Leeds | type=3 | mins=0
+Crew | Charlie Crew | Leeds | type=3 | mins=0
+Gelhardt | Joe Gelhardt | Leeds | type=3 | mins=0
+Gyabi | Darko Gyabi | Leeds | type=3 | mins=0
+Bamford | Patrick Bamford | Leeds | type=4 | mins=0
+Mateo Joseph | Mateo Joseph Fernández-Regatillo | Leeds | type=4 | mins=0
+R.Williams | Rhys Williams | Liverpool | type=2 | mins=0
+Bajcetic | Stefan Bajčetić Maquieira | Liverpool | type=3 | mins=0
+Ndiaye | Talla Ndiaye | Liverpool | type=2 | mins=0
+Nypan | Sverre Nypan | Man City | type=3 | mins=0
+Gillespie | Mark Gillespie | Newcastle | type=1 | mins=0
+Ashby | Harrison Ashby | Newcastle | type=2 | mins=0
+Pivas | Miodrag Pivaš | Newcastle | type=2 | mins=0
+Antoñito C. | Antoñito Cordero Campillo | Newcastle | type=3 | mins=0
+Hayden | Isaac Hayden | Newcastle | type=3 | mins=0
+Kuol | Garang Kuol | Newcastle | type=3 | mins=0
+White | Joe White | Newcastle | type=3 | mins=0
+David Carmo | David Mota Veiga Teixeira do Carmo | Nott'm Forest | type=2 | mins=0
+O.Richards | Omar Richards | Nott'm Forest | type=2 | mins=0
+O'Brien | Lewis O'Brien | Nott'm Forest | type=3 | mins=0
+Stamenic | Marko Stamenić | Nott'm Forest | type=3 | mins=0
+Cuiabano | Luis Eduardo Soares da Silva | Nott'm Forest | type=2 | mins=0
+Nna Noukeu | Blondy Nna Noukeu | Sunderland | type=1 | mins=0
+Alese | Aji Alese | Sunderland | type=2 | mins=0
+Anderson | Joe Anderson | Sunderland | type=2 | mins=0
+Huggins | Niall Huggins | Sunderland | type=2 | mins=0
+Johnson | Zak Johnson | Sunderland | type=2 | mins=0
+Pembele | Timothée Pembélé | Sunderland | type=2 | mins=0
+Poveda | Ian Poveda-Ocampo | Sunderland | type=3 | mins=0
+Ba | Abdoullah Ba | Sunderland | type=3 | mins=0
+Browne | Alan Browne | Sunderland | type=3 | mins=0
+Ekwah | Pierre Ekwah Elimby | Sunderland | type=3 | mins=0
+Matete | Jay Matete | Sunderland | type=3 | mins=0
+Triantis | Nectarios Triantis | Sunderland | type=3 | mins=0
+Abdullahi | Ahmed Abdullahi | Sunderland | type=4 | mins=0
+Luís Hemir | Luís Hemir Silva Semedo | Sunderland | type=4 | mins=0
+Rusyn | Nazarii Rusyn | Sunderland | type=4 | mins=0
+Phillips | Ashley Phillips | Spurs | type=2 | mins=0
+Bryan | Bryan Gil Salvatierra | Spurs | type=3 | mins=0
+Hegyi | Krisztián Hegyi | West Ham | type=1 | mins=0
+Hodge | Joe Hodge | Wolves | type=3 | mins=0
+Fábio Silva | Fábio Soares Silva | Wolves | type=4 | mins=0
+Chiwome | Leon Chiwome | Wolves | type=4 | mins=0
+Fraser | Nathan Fraser | Wolves | type=4 | mins=0
+Abbey | Jerome Abbey | Wolves | type=3 | mins=16
