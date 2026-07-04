@@ -14,15 +14,27 @@ Two competitions (switch with the pills in the top bar):
   been rebuilt. Knockout scoring is extra-time aware (120-minute windows) and
   shootout kicks are excluded.
 
-## Run it
+## Play it
 
-Double-click `start.bat`, or run:
+**Live site:** https://spanalytic.github.io/spin-xi/ (GitHub Pages, repo
+`spanalytic/spin-xi`). Each player's teams/history live in their own browser
+(localStorage) — share the link and everyone plays independently.
+
+The home page shows the current live round with a kick-off deadline and a
+Play button; completed rounds are under the **Practice** tab.
+
+Locally: double-click `start.bat`, or run
+`python -m http.server 8317 --directory web` and open http://localhost:8317
+
+## Updating during the tournament
 
 ```
-python -m http.server 8317 --directory web
+deploy.bat        rebuild from already-fetched match files + publish
+deploy.bat fetch  fetch the latest results first, then publish
 ```
 
-then open http://localhost:8317
+Run `deploy.bat fetch` after each matchday; players then reopen their saved
+teams to see updated scores. Pages' CDN can lag a few minutes after a push.
 
 ## How it works
 
