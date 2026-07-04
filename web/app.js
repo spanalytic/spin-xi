@@ -766,8 +766,10 @@ function entryTimeLabel(ts) {
 
 async function lbRead(key) {
   try {
-    const r = await fetch(`${LB.read}${LB.board}_${key}?t=${Date.now()}`, { cache: "no-store" });
+    const r = await fetch(`${LB.read}${LB.board}_${key}`, { cache: "no-store" });
+    if (!r.ok) return null;
     const txt = await r.text();
+    if (!txt || !/^\s*[\[{]/.test(txt)) return null;
     return txt ? JSON.parse(txt) : null;
   } catch { return null; }
 }
@@ -776,7 +778,11 @@ async function lbWrite(key, obj) {
   const body = new URLSearchParams();
   body.set("key", `${LB.board}_${key}`);
   body.set("value", JSON.stringify(obj));
-  await fetch(LB.write, { method: "POST", body });
+  const r = await fetch(LB.write, { method: "POST", body });
+  if (!r.ok) throw new Error(`Leaderboard write failed (${r.status})`);
+  const txt = await r.text();
+  const data = txt ? JSON.parse(txt) : null;
+  if (!data || data.status !== 1) throw new Error("Leaderboard write rejected");
 }
 
 // submit this team entry; repeat entries are allowed, exact resubmits are replaced
@@ -785,13 +791,18 @@ async function lbSubmit(entry) {
   if (!name) return false;
   const slug = playerSlug(name);
   try {
-    const mine = (await lbRead(`p_${slug}`)) || { name, entries: [] };
+    const rawMine = await lbRead(`p_${slug}`);
+    const mine = rawMine && typeof rawMine === "object" && !Array.isArray(rawMine)
+      ? rawMine
+      : { name, entries: [] };
     const entryKey = lbEntryKey(entry);
     mine.name = name;
+    mine.entries = Array.isArray(mine.entries) ? mine.entries : [];
     mine.entries = mine.entries.filter((e) => lbEntryKey(e) !== entryKey);
     mine.entries.push(entry);
     await lbWrite(`p_${slug}`, mine);
-    const members = (await lbRead("members")) || [];
+    const membersRaw = await lbRead("members");
+    const members = Array.isArray(membersRaw) ? membersRaw : [];
     if (!members.includes(slug)) {
       members.push(slug);
       await lbWrite("members", members);
