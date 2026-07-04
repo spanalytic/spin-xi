@@ -244,7 +244,7 @@ function scorePlayer(rows, cat, pendingFixture) {
 
 /* ---------------- screens ---------------- */
 
-const SCREENS = ["screen-home", "screen-setup", "screen-game", "screen-results", "screen-board"];
+const SCREENS = ["screen-home", "screen-setup", "screen-game", "screen-results", "screen-board", "screen-howto"];
 function show(screen) {
   for (const id of SCREENS) $(id).classList.toggle("hidden", id !== screen);
   window.scrollTo(0, 0);
@@ -463,6 +463,7 @@ function renderGameStatus() {
   $("game-status").innerHTML = `
     <span><b>${gwLabel(S.game.gw)}</b> &middot; ${S.game.formation}</span>
     <span class="status-count">${n} / 11 picked</span>`;
+  $("captain-banner").classList.toggle("hidden", !(n === 11 && !S.game.captain));
   if (n === 11) {
     $("spin-btn").disabled = true;
     if (!S.game.captain) {
@@ -1162,6 +1163,7 @@ async function init() {
   $("nav-home").addEventListener("click", goHome);
   $("nav-new").addEventListener("click", () => goSetup());
   $("nav-board").addEventListener("click", goBoard);
+  $("nav-howto").addEventListener("click", () => show("screen-howto"));
   $("board-refresh").addEventListener("click", renderBoard);
   $("board-name-save").addEventListener("click", async () => {
     const name = $("board-name").value.trim();

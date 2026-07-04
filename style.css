@@ -388,7 +388,45 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
 .result-pts.zero { color: var(--muted); }
 .results-actions { text-align: center; margin-top: 24px; display: flex; gap: 14px; justify-content: center; }
 
+/* ---------- captain banner ---------- */
+.captain-banner {
+  text-align: center; margin: 0 0 12px;
+  font-size: 26px; font-weight: 900; letter-spacing: 0.5px;
+  color: var(--gold);
+  animation: cap-glow 1s infinite;
+}
+@keyframes cap-glow {
+  0%, 100% { text-shadow: 0 0 6px rgba(255, 210, 74, 0.45); transform: scale(1); }
+  50% { text-shadow: 0 0 18px rgba(255, 210, 74, 0.95), 0 0 34px rgba(255, 210, 74, 0.5); transform: scale(1.02); }
+}
+
+/* ---------- how to play ---------- */
+.howto-title { font-size: 26px; margin: 6px 0 16px; }
+.howto-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.howto-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px 20px;
+}
+.howto-card h3 { color: var(--accent); font-size: 16px; margin-bottom: 10px; }
+.howto-card ol { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.howto-card li { font-size: 14px; line-height: 1.5; color: #d6dbf0; }
+.howto-sub { font-size: 18px; margin: 24px 0 10px; }
+.score-table {
+  width: 100%; border-collapse: collapse;
+  background: var(--panel); border-radius: 12px; overflow: hidden;
+}
+.score-table th, .score-table td {
+  padding: 9px 14px; font-size: 14px; text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.score-table th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.score-table td:last-child, .score-table th:last-child {
+  text-align: right; font-weight: 800; color: var(--gold); white-space: nowrap;
+}
+.howto-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+
 @media (max-width: 980px) {
   .game-layout { grid-template-columns: 1fr; }
   .wheel-col { order: -1; }
+  .captain-banner { font-size: 20px; }
 }
