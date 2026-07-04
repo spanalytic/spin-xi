@@ -183,7 +183,7 @@ function scorePlayer(rows, cat, pendingFixture) {
 
 /* ---------------- screens ---------------- */
 
-const SCREENS = ["screen-home", "screen-setup", "screen-game", "screen-results"];
+const SCREENS = ["screen-home", "screen-setup", "screen-game", "screen-results", "screen-board"];
 function show(screen) {
   for (const id of SCREENS) $(id).classList.toggle("hidden", id !== screen);
   window.scrollTo(0, 0);
@@ -670,6 +670,125 @@ function closePicker() {
   if (S.game && filledCount() < 11 && !S.wheel.spinning) $("spin-btn").disabled = false;
 }
 
+/* ---------------- shared leaderboard ----------------
+   Storage: textdb.online (free, CORS-friendly, no accounts). Each player
+   writes only their own key; a members key is the directory. Entries store
+   the PICKS, not the score — every viewer recomputes scores from their own
+   match data, so the board stays live as games finish. */
+
+const LB = {
+  read: "https://textdb.online/",
+  write: "https://textdb.online/update",
+  board: "spinxi26_b7wq4x9r",
+};
+const NAME_KEY = "spinxi_player_name";
+
+function playerName() { return localStorage.getItem(NAME_KEY) || ""; }
+function playerSlug(name) {
+  return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20);
+}
+
+async function lbRead(key) {
+  try {
+    const r = await fetch(`${LB.read}${LB.board}_${key}?t=${Date.now()}`, { cache: "no-store" });
+    const txt = await r.text();
+    return txt ? JSON.parse(txt) : null;
+  } catch { return null; }
+}
+
+async function lbWrite(key, obj) {
+  const body = new URLSearchParams();
+  body.set("key", `${LB.board}_${key}`);
+  body.set("value", JSON.stringify(obj));
+  await fetch(LB.write, { method: "POST", body });
+}
+
+// submit/replace this player's entry for a round (fire-and-forget safe)
+async function lbSubmit(entry) {
+  const name = playerName();
+  if (!name) return false;
+  const slug = playerSlug(name);
+  try {
+    const mine = (await lbRead(`p_${slug}`)) || { name, entries: [] };
+    mine.name = name;
+    mine.entries = mine.entries.filter((e) => !(e.comp === entry.comp && e.gw === entry.gw));
+    mine.entries.push(entry);
+    await lbWrite(`p_${slug}`, mine);
+    const members = (await lbRead("members")) || [];
+    if (!members.includes(slug)) {
+      members.push(slug);
+      await lbWrite("members", members);
+    }
+    return true;
+  } catch (e) {
+    console.warn("leaderboard submit failed", e);
+    return false;
+  }
+}
+
+// score an entry with the viewer's current data (captain doubled, pending-aware)
+function computeEntryScore(entry, stats) {
+  let total = 0, pending = false;
+  const slots = FORMATIONS[entry.formation] || [];
+  (entry.picks || []).forEach((pid, i) => {
+    const cat = slots[i] ? ROLES[slots[i][0]].cat : "MID";
+    const p = S.playersById[pid];
+    const pend = p ? teamFixtures(p.team, entry.gw).some((f) => f.hs === null || f.hs === undefined) : false;
+    const res = scorePlayer(p ? stats[String(p.id)] : null, cat, pend);
+    if (res.pending) pending = true;
+    let pts = res.total;
+    if (p && entry.captain === p.id && !res.pending) pts *= 2;
+    total += pts;
+  });
+  return { total, pending };
+}
+
+async function renderBoard() {
+  $("board-name").value = playerName();
+  const body = $("board-body");
+  body.innerHTML = `<div class="history-empty">Loading leaderboard…</div>`;
+  const members = (await lbRead("members")) || [];
+  if (members.length === 0) {
+    body.innerHTML = `<div class="history-empty">Nobody on the board yet — finish a team to join!</div>`;
+    return;
+  }
+  const playersData = (await Promise.all(members.map((m) => lbRead(`p_${m}`)))).filter(Boolean);
+
+  const rows = [];
+  for (const pd of playersData) {
+    const entries = (pd.entries || []).filter((e) => e.comp === S.comp);
+    if (!entries.length) continue;
+    const perGw = [];
+    let total = 0, anyPending = false;
+    for (const e of entries.sort((a, b) => a.gw - b.gw)) {
+      const stats = await loadGwStats(e.gw);
+      const sc = computeEntryScore(e, stats);
+      perGw.push({ label: e.label || "GW " + e.gw, pts: sc.total, pending: sc.pending });
+      total += sc.total;
+      anyPending = anyPending || sc.pending;
+    }
+    rows.push({ name: pd.name, total, perGw, anyPending });
+  }
+  if (!rows.length) {
+    body.innerHTML = `<div class="history-empty">No ${COMP_LABELS[S.comp]} teams on the board yet.</div>`;
+    return;
+  }
+  rows.sort((a, b) => b.total - a.total);
+  const me = playerName();
+  body.innerHTML = rows.map((r, i) => `
+    <div class="board-row${r.name === me ? " me" : ""}">
+      <div class="board-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</div>
+      <div class="board-player">
+        <div class="board-pname">${r.name}</div>
+        <div class="board-chips">${r.perGw.map((g) =>
+          `<span class="bchip${g.pending ? " pend" : ""}">${g.label}: ${g.pts}${g.pending ? " ⏳" : ""}</span>`).join("")}</div>
+      </div>
+      <div class="board-total">${r.total}${r.anyPending ? '<span class="board-live">live</span>' : ""}</div>
+    </div>`).join("");
+}
+
+function goBoard() { renderBoard(); show("screen-board"); }
+
 /* ---------------- results ---------------- */
 
 function renderResults(game, stats, opts = {}) {
@@ -727,21 +846,44 @@ async function finishGame() {
   const stats = await loadGwStats(S.game.gw);
   const total = renderResults(S.game, stats);
 
-  const hist = getHistory();
-  hist.push({
-    id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
-    ts: Date.now(),
+  const entry = {
     comp: S.comp,
     label: gwLabel(S.game.gw),
     gw: S.game.gw,
     formation: S.game.formation,
     picks: S.game.slots.map((s) => s.player.id),
     captain: S.game.captain,
+    ts: Date.now(),
+  };
+  const hist = getHistory();
+  hist.push({
+    id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+    ts: entry.ts,
     score: total,
+    ...entry,
   });
   saveHistory(hist);
   S.game = null;
   show("screen-results");
+
+  // share to the leaderboard (latest team per round counts)
+  const note = document.createElement("div");
+  note.className = "submit-note";
+  $("results-head").appendChild(note);
+  if (playerName()) {
+    note.textContent = "Submitting to leaderboard…";
+    lbSubmit(entry).then((ok) => {
+      note.innerHTML = ok
+        ? `✔ On the leaderboard as <b>${playerName()}</b>`
+        : "⚠ Leaderboard submit failed — open the leaderboard and try Refresh later";
+    });
+  } else {
+    note.innerHTML = `<button class="nav-btn" id="join-board">🏆 Join the leaderboard</button>`;
+    $("join-board").addEventListener("click", () => {
+      S.pendingSubmit = entry;
+      goBoard();
+    });
+  }
 }
 
 /* ---------------- wire-up ---------------- */
@@ -754,6 +896,29 @@ async function init() {
   $("brand-home").addEventListener("click", goHome);
   $("nav-home").addEventListener("click", goHome);
   $("nav-new").addEventListener("click", () => goSetup());
+  $("nav-board").addEventListener("click", goBoard);
+  $("board-refresh").addEventListener("click", renderBoard);
+  $("board-name-save").addEventListener("click", async () => {
+    const name = $("board-name").value.trim();
+    if (!name) return;
+    localStorage.setItem(NAME_KEY, name);
+    if (S.pendingSubmit) {
+      await lbSubmit(S.pendingSubmit);
+      S.pendingSubmit = null;
+    } else {
+      // (re)submit all locally saved teams under this name
+      const latest = {};
+      for (const h of getHistory()) {
+        const k = `${entryComp(h)}|${h.gw}`;
+        if (!latest[k] || h.ts > latest[k].ts) latest[k] = h;
+      }
+      for (const h of Object.values(latest)) {
+        if (!h.picks) continue;
+        await lbSubmit({ comp: entryComp(h), label: h.label, gw: h.gw, formation: h.formation, picks: h.picks, captain: h.captain, ts: h.ts });
+      }
+    }
+    renderBoard();
+  });
   $("setup-start").addEventListener("click", startGame);
   // keep the live-round countdown fresh while the home screen is visible
   setInterval(() => {
