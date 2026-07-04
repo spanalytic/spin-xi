@@ -327,6 +327,33 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
 .picker-empty .big-btn { margin-top: 16px; }
 .picker-note { color: var(--muted); font-size: 12px; padding: 8px 10px 0; }
 
+/* ---------- leaderboard ---------- */
+.board-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin: 6px 0 18px; }
+.board-head h2 { font-size: 24px; }
+.board-name-row { display: flex; gap: 8px; align-items: center; }
+#board-name {
+  background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  border-radius: 8px; padding: 8px 12px; font-size: 14px; width: 160px;
+}
+#board-name:focus { outline: none; border-color: var(--accent); }
+.board-row {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 18px; margin-bottom: 8px;
+}
+.board-row.me { border-color: var(--accent); }
+.board-rank { font-size: 20px; font-weight: 800; min-width: 40px; text-align: center; }
+.board-player { flex: 1; min-width: 0; }
+.board-pname { font-weight: 800; font-size: 16px; margin-bottom: 5px; }
+.board-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.board-total { font-size: 26px; font-weight: 900; color: var(--gold); text-align: right; }
+.board-total .board-live {
+  display: block; font-size: 10px; font-weight: 700; color: #3ddc84;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.submit-note { margin-top: 12px; font-size: 14px; color: var(--muted); }
+.submit-note b { color: var(--accent); }
+
 /* ---------- results ---------- */
 .results-head { text-align: center; padding: 26px 0 20px; }
 .results-head .total { font-size: 64px; font-weight: 900; color: var(--gold); line-height: 1; }

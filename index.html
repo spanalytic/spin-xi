@@ -17,6 +17,7 @@
   <nav>
     <button class="nav-btn" id="nav-home">Home</button>
     <button class="nav-btn" id="nav-new">Practice</button>
+    <button class="nav-btn" id="nav-board">🏆 Leaderboard</button>
   </nav>
 </header>
 
@@ -61,6 +62,19 @@
         <button class="text-btn" id="abandon-btn">Abandon team</button>
       </div>
     </div>
+  </section>
+
+  <!-- ============ LEADERBOARD ============ -->
+  <section id="screen-board" class="screen hidden">
+    <div class="board-head">
+      <h2>🏆 Leaderboard</h2>
+      <div class="board-name-row">
+        <input id="board-name" maxlength="20" placeholder="Your name">
+        <button class="nav-btn" id="board-name-save">Save name</button>
+        <button class="nav-btn" id="board-refresh">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="board-body"></div>
   </section>
 
   <!-- ============ RESULTS ============ -->
