@@ -345,8 +345,9 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
 .board-row {
   display: flex; align-items: center; gap: 16px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  padding: 12px 18px; margin-bottom: 8px;
+  padding: 12px 18px; margin-bottom: 8px; cursor: pointer;
 }
+.board-row:hover { border-color: var(--accent); background: var(--panel-2); }
 .board-row.me { border-color: var(--accent); }
 .board-rank { font-size: 20px; font-weight: 800; min-width: 40px; text-align: center; }
 .board-player { flex: 1; min-width: 0; }
