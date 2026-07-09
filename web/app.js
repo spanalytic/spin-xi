@@ -127,7 +127,7 @@ function playLandingSound() {
 
 async function loadComp(comp) {
   if (!S.cores[comp]) {
-    const res = await fetch(`data/${comp}/core.json`);
+    const res = await fetch(`data/${comp}/core.json`, { cache: "no-cache" });
     const core = await res.json();
     const teamsById = {}, playersById = {}, playersByTeam = {};
     for (const t of core.teams) teamsById[t.id] = t;
@@ -174,7 +174,7 @@ function renderCompSwitch() {
 async function loadGwStats(gw) {
   const key = `${S.comp}:${gw}`;
   if (!S.gwStatsCache[key]) {
-    const res = await fetch(`data/${S.comp}/gw${gw}.json`);
+    const res = await fetch(`data/${S.comp}/gw${gw}.json`, { cache: "no-cache" });
     S.gwStatsCache[key] = await res.json();
   }
   return S.gwStatsCache[key];
@@ -263,6 +263,19 @@ function entryInLiveRound(h) {
   return entryComp(h) === S.comp && (!LIVE_SITE_GW || h.gw === LIVE_SITE_GW);
 }
 
+// entries lock at the round's first kick-off
+const DEADLINE_GRACE_MS = 10 * 60 * 1000;   // clock-skew tolerance on the board
+function roundDeadline(gw) {
+  const ev = S.core.events.find((e) => e.gw === gw);
+  return ev ? new Date(ev.deadline).getTime() : 0;
+}
+function entriesOpen(gw) {
+  return Date.now() < roundDeadline(gw);
+}
+function entryOnTime(e) {
+  return (e.ts || 0) <= roundDeadline(e.gw) + DEADLINE_GRACE_MS;
+}
+
 function liveRound() {
   return S.core.events.find((e) => e.gw === LIVE_SITE_GW)
     || S.core.events.find((e) => !e.finished)
@@ -290,9 +303,11 @@ function renderLiveCard() {
   const dl = new Date(ev.deadline);
   const fmt = dl.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const diff = dl - Date.now();
+  const open = entriesOpen(ev.gw);
   const cd = ev.finished
-    ? "round complete — entries still open"
-    : diff > 0 ? `kicks off in ${fmtDur(diff)}` : "round in progress — entries still open";
+    ? "round complete — entries closed"
+    : diff > 0 ? `entries close at first kick-off — ${fmtDur(diff)} left`
+    : "round in progress — entries closed";
   const fx = S.core.fixtures.filter((f) => f.gw === ev.gw);
   const fxHtml = fx.map((f) => {
     const h = S.teamsById[f.h], a = S.teamsById[f.a];
@@ -304,9 +319,12 @@ function renderLiveCard() {
     <div class="live-tag">${ev.finished ? "ROUND COMPLETE" : "● LIVE ROUND"}</div>
     <h1>${COMP_LABELS[S.comp]} ${ev.name}</h1>
     <div class="deadline">⏰ First kick-off ${fmt} <span class="cd">· ${cd}</span></div>
-    <button class="big-btn" id="live-play">▶ ENTER ${(ev.short || "GW " + ev.gw).toUpperCase()} TEAM</button>
+    ${open
+      ? `<button class="big-btn" id="live-play">▶ ENTER ${(ev.short || "GW " + ev.gw).toUpperCase()} TEAM</button>`
+      : `<div class="entries-closed">🔒 Entries closed — the first game has kicked off</div>`}
     <div class="live-fixtures">${fxHtml}</div>`;
-  $("live-play").addEventListener("click", () => goSetup({ lockedGw: ev.gw }));
+  const lp = $("live-play");
+  if (lp) lp.addEventListener("click", () => goSetup({ lockedGw: ev.gw }));
 }
 
 function renderHome() {
@@ -382,6 +400,7 @@ function renderSetup(opts = {}) {
 
   $("setup-step-gw").classList.toggle("hidden", locked);
   $("gw-grid").classList.toggle("hidden", locked);
+  $("setup-closed-note").classList.toggle("hidden", !(locked && !entriesOpen(opts.lockedGw)));
   $("setup-step-formation").textContent = locked
     ? `${gwLabel(opts.lockedGw)} — choose your formation`
     : "2 · Choose your formation";
@@ -976,7 +995,7 @@ async function renderBoard() {
   const rowsByKey = {};
   const me = playerName();
   for (const pd of playersData) {
-    const entries = (pd.entries || []).filter(entryInLiveRound);
+    const entries = (pd.entries || []).filter((e) => entryInLiveRound(e) && entryOnTime(e));
     for (const e of entries) {
       const stats = await loadGwStats(e.gw);
       const sc = computeEntryScore(e, stats);
@@ -1126,7 +1145,9 @@ async function finishGame() {
   const note = document.createElement("div");
   note.className = "submit-note";
   $("results-head").appendChild(note);
-  if (playerName()) {
+  if (!entriesOpen(entry.gw)) {
+    note.innerHTML = "🔒 Entries closed for this round — saved as a practice team (not on the leaderboard).";
+  } else if (playerName()) {
     queuePendingSubmit(entry);
     note.textContent = "Submitting to leaderboard…";
     lbSubmit(entry).then((ok) => {

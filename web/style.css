@@ -388,6 +388,18 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
 .result-pts.zero { color: var(--muted); }
 .results-actions { text-align: center; margin-top: 24px; display: flex; gap: 14px; justify-content: center; }
 
+/* ---------- entry deadline ---------- */
+.entries-closed {
+  display: inline-block; background: rgba(255, 93, 115, 0.12);
+  border: 1px solid var(--red); color: var(--red);
+  border-radius: 12px; padding: 13px 24px; font-weight: 800; font-size: 15px;
+}
+.closed-note {
+  background: rgba(255, 93, 115, 0.1); border: 1px solid var(--red);
+  color: var(--red); border-radius: 12px; padding: 12px 18px;
+  font-weight: 600; font-size: 14px; margin: 8px 0 14px;
+}
+
 /* ---------- first-visit name gate ---------- */
 .name-gate {
   background: linear-gradient(135deg, #182042, var(--panel));
