@@ -43,7 +43,7 @@ const GOAL_PTS = { GK: 10, DEF: 6, MID: 5, FWD: 4 };
 const CS_PTS = { GK: 4, DEF: 4, MID: 1, FWD: 0 };
 
 const LIVE_SITE_COMP = "wc2026";
-const LIVE_SITE_GW = 5; // World Cup Round of 16
+const LIVE_SITE_GW = 6; // World Cup Quarter-Finals
 const COMP_IDS = [LIVE_SITE_COMP];
 const COMP_LABELS = { epl: "Premier League", wc2026: "World Cup 2026" };
 
