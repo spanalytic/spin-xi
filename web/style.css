@@ -460,6 +460,7 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
 .chip.fit { background: var(--brand-soft); border-color: transparent; color: var(--brand-ink); }
 .picker-empty { text-align: center; padding: 30px 10px; color: var(--muted); }
 .picker-empty .big-btn { margin-top: 16px; }
+.keep-btn { display: block; width: calc(100% - 20px); margin: 10px 10px 6px; }
 .picker-note { color: var(--muted); font-size: 12px; font-weight: 600; padding: 14px 10px 2px; text-transform: uppercase; letter-spacing: .6px; }
 
 /* ---------- leaderboard ---------- */

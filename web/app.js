@@ -1115,6 +1115,15 @@ function openPicker(team) {
       for (const p of rest) body.appendChild(playerRow(p, team, false, pending));
     }
   }
+  // a re-spin can be turned down: the team stays exactly as entered
+  const kept = S.game.respin?.removed;
+  if (kept) {
+    const keep = document.createElement("button");
+    keep.className = "nav-btn keep-btn";
+    keep.textContent = `Keep ${kept.name}`;
+    keep.addEventListener("click", () => { closePicker(); S.game = null; goHome(); });
+    body.prepend(keep);
+  }
   $("modal-backdrop").classList.remove("hidden");
 }
 
