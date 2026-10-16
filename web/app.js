@@ -497,19 +497,8 @@ function renderHome() {
       <div class="history-meta">${COMP_LABELS[entryComp(h)]} &middot; ${h.formation} &middot; picked ${date}
         ${tag ? `<span class="bchip">${tag}</span>` : ""}
         ${teamFaces(h.picks)}</div>
-      <div class="history-score">${h.score}<small>pts</small></div>
-      <button class="history-del" title="Remove from this device">✕</button>`;
+      <div class="history-score">${h.score}<small>pts</small></div>`;
     row.addEventListener("click", () => viewHistoryEntry(h));
-    row.querySelector(".history-del").addEventListener("click", (e) => {
-      e.stopPropagation();
-      const msg = signedIn() || playerName()
-        ? "Are you sure? This only hides the team from Your teams on this device. Teams can't be taken off the leaderboard, so it will still count."
-        : "Are you sure you want to delete this team?";
-      if (!confirm(msg)) return;
-      saveHistory(getHistory().filter((x) => x.id !== h.id));
-      rememberDeleted(h.id);
-      renderHome();
-    });
     list.appendChild(row);
   }
 }
@@ -1186,7 +1175,6 @@ const PENDING_SUBMITS_KEY = "spinxi_pending_submits_v1";
    signing in on the browser that entered them links them to the account.
    Without a config the site keeps the name-only textdb board. */
 const AUTH_ON = !!window.SPINXI_FIREBASE;
-const DELETED_KEY = "spinxi_deleted_ids_v1";
 const A = { mod: null, user: null, profile: null, failed: false, ready: Promise.resolve() };
 
 function startAuth() {
@@ -1246,24 +1234,16 @@ function adoptLocalTeams() {
 
 // teams entered on another device show up in Your Teams
 function mergeRemoteHistory() {
-  let deleted = [];
-  try { deleted = JSON.parse(localStorage.getItem(DELETED_KEY)) || []; } catch {}
   const hist = getHistory();
   const have = new Set(hist.map((h) => h.id));
   let changed = false;
   for (const e of A.profile.entries) {
-    if (have.has(e.id) || deleted.includes(e.id)) continue;
+    if (have.has(e.id)) continue;
     hist.push({ ...e, score: 0 });
     changed = true;
   }
   if (changed) saveHistory(hist);
   return changed;
-}
-function rememberDeleted(id) {
-  let deleted = [];
-  try { deleted = JSON.parse(localStorage.getItem(DELETED_KEY)) || []; } catch {}
-  if (!deleted.includes(id)) deleted.push(id);
-  localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
 }
 
 function renderAccount() {

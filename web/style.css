@@ -221,8 +221,6 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
 .history-meta .faces .photo { width: 26px; height: 26px; border: 2px solid var(--surface); margin-right: -6px; }
 .history-score { font-family: var(--display); font-size: 30px; font-weight: 800; min-width: 70px; text-align: right; line-height: 1; }
 .history-score small { font-family: "Inter", sans-serif; font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 2px; }
-.history-del { background: none; border: none; color: var(--faint); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
-.history-del:hover { color: var(--red); background: var(--red-soft); }
 
 /* ---------- setup ---------- */
 .setup-step { font-size: 18px; margin: 4px 0 14px; }
