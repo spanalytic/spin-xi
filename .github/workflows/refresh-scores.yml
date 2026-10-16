@@ -58,7 +58,7 @@ jobs:
           fi
           git config user.name "spin-xi-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/data data/raw/2627
+          git add web/data web/img data/raw/2627
           git commit -q -m "Live FPL score refresh"
           git pull -q --rebase origin main
           git push -q origin HEAD:main
