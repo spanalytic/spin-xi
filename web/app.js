@@ -1,5 +1,5 @@
 /* ================================================================
-   Spin XI — Premier League wheel game (2025/26 season)
+   Spin XI — Premier League wheel game (2026/27 season, FPL scoring)
    ================================================================ */
 
 /* ---------------- formation + position model ---------------- */
@@ -42,10 +42,9 @@ const CAT_LABEL = { GK: "Goalkeeper", DEF: "Defender", MID: "Midfielder", FWD: "
 const GOAL_PTS = { GK: 10, DEF: 6, MID: 5, FWD: 4 };
 const CS_PTS = { GK: 4, DEF: 4, MID: 1, FWD: 0 };
 
-const LIVE_SITE_COMP = "wc2026";
-const LIVE_SITE_GW = 6; // World Cup Quarter-Finals
+const LIVE_SITE_COMP = "epl2627";
 const COMP_IDS = [LIVE_SITE_COMP];
-const COMP_LABELS = { epl: "Premier League", wc2026: "World Cup 2026" };
+const COMP_LABELS = { epl2627: "Premier League", epl: "Premier League 25/26", wc2026: "World Cup 2026" };
 
 const HISTORY_KEY = "spinxi_history_v1";
 
@@ -186,7 +185,7 @@ function gwStatsSync(gw) {
 
 /* ---------------- scoring engine ---------------- */
 
-// rows: per-fixture stat objects {mp,gs,a,cs,gc,og,ps,pm,yc,rc,sv}; cat: GK/DEF/MID/FWD
+// FPL scoring. rows: per-fixture FPL stat objects {mp,gs,a,cs,gc,og,ps,pm,yc,rc,sv,dc,b}; cat: GK/DEF/MID/FWD
 // pendingFixture: the player's team still has an unplayed game this round
 function scorePlayer(rows, cat, pendingFixture) {
   const lines = [];   // [label, points]
@@ -225,7 +224,7 @@ function scorePlayer(rows, cat, pendingFixture) {
     }
   }
 
-  add(`Played ${mins} min`, minutesPts);
+  add(mins ? `Played ${mins} min` : "Did not play", minutesPts);
   if (gs) add(`${gs} goal${gs > 1 ? "s" : ""} (${CAT_LABEL[cat].toLowerCase()})`, gs * GOAL_PTS[cat]);
   if (a) add(`${a} assist${a > 1 ? "s" : ""}`, a * 3);
   if (cs && CS_PTS[cat]) add(`Clean sheet${cs > 1 ? " x" + cs : ""}`, cs * CS_PTS[cat]);
@@ -237,7 +236,7 @@ function scorePlayer(rows, cat, pendingFixture) {
   if (yc) add(`${yc} yellow card${yc > 1 ? "s" : ""}`, yc * -1);
   if (rc) add(`Red card`, rc * -3);
   if (og) add(`${og} own goal${og > 1 ? "s" : ""}`, og * -2);
-  if (bonus) add(`Bonus points (match top 3)`, bonus);
+  if (bonus) add(`Bonus points`, bonus);
 
   return { total, lines };
 }
@@ -259,9 +258,7 @@ function getHistory() {
 function saveHistory(list) { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }
 
 function entryComp(h) { return h.comp || "epl"; }
-function entryInLiveRound(h) {
-  return entryComp(h) === S.comp && (!LIVE_SITE_GW || h.gw === LIVE_SITE_GW);
-}
+function entryInSeason(h) { return entryComp(h) === S.comp; }
 
 // entries lock at the round's first kick-off
 const DEADLINE_GRACE_MS = 10 * 60 * 1000;   // clock-skew tolerance on the board
@@ -276,10 +273,17 @@ function entryOnTime(e) {
   return (e.ts || 0) <= roundDeadline(e.gw) + DEADLINE_GRACE_MS;
 }
 
+// the gameweek open for entries: the next one whose first kick-off is still
+// ahead (falls back to the last gameweek once the season is over)
 function liveRound() {
-  return S.core.events.find((e) => e.gw === LIVE_SITE_GW)
-    || S.core.events.find((e) => !e.finished)
-    || null;
+  const evs = S.core.events;
+  return evs.find((e) => entriesOpen(e.gw)) || evs[evs.length - 1] || null;
+}
+
+// the most recent gameweek that has kicked off (the one being scored now)
+function currentRound() {
+  const started = S.core.events.filter((e) => !entriesOpen(e.gw));
+  return started[started.length - 1] || null;
 }
 
 function fmtDur(ms) {
@@ -293,9 +297,9 @@ function renderLiveCard() {
   const ev = liveRound();
   if (!ev) {
     lc.innerHTML = `
-      <div class="live-tag done">WORLD CUP</div>
+      <div class="live-tag done">PREMIER LEAGUE</div>
       <h1>${S.core.season}</h1>
-      <p class="live-sub">Enter a team for the World Cup round.</p>
+      <p class="live-sub">Fixtures for the new gameweek are on their way.</p>
       <button class="big-btn" id="live-play">▶ ENTER TEAM</button>`;
     $("live-play").addEventListener("click", () => goSetup());
     return;
@@ -329,15 +333,18 @@ function renderLiveCard() {
 
 function renderHome() {
   renderLiveCard();
-  const hist = getHistory().filter(entryInLiveRound).sort((x, y) => y.ts - x.ts);
+  const hist = getHistory().filter(entryInSeason).sort((x, y) => y.ts - x.ts);
   const entries = hist.length;
-  const latest = hist[0] ? hist[0].score : 0;
   const best = hist.reduce((m, h) => Math.max(m, h.score), 0);
+  // season total: your most recent team in each gameweek counts
+  const latestByGw = {};
+  for (const h of hist) if (!(h.gw in latestByGw)) latestByGw[h.gw] = h.score;
+  const seasonTotal = Object.values(latestByGw).reduce((t, x) => t + x, 0);
 
   $("season-summary").innerHTML = entries === 0 ? "" : `
-    <div class="stat-card"><div class="num">${entries}</div><div class="lbl">Entries</div></div>
-    <div class="stat-card"><div class="num">${best}</div><div class="lbl">Best score</div></div>
-    <div class="stat-card"><div class="num">${latest}</div><div class="lbl">Latest score</div></div>`;
+    <div class="stat-card"><div class="num">${seasonTotal}</div><div class="lbl">Season total</div></div>
+    <div class="stat-card"><div class="num">${best}</div><div class="lbl">Best gameweek</div></div>
+    <div class="stat-card"><div class="num">${entries}</div><div class="lbl">Teams entered</div></div>`;
 
   const list = $("history-list");
   if (hist.length === 0) {
@@ -362,6 +369,24 @@ function renderHome() {
     });
     list.appendChild(row);
   }
+}
+
+// re-score saved teams from the latest data so the season total stays current
+async function refreshHistoryScores() {
+  const hist = getHistory();
+  const gws = new Set(hist.filter((h) => entryInSeason(h) && h.picks && !entriesOpen(h.gw)).map((h) => h.gw));
+  let changed = false;
+  for (const gw of gws) {
+    if (!S.core.events.some((e) => e.gw === gw)) continue;
+    const stats = await loadGwStats(gw);
+    for (const h of hist) {
+      if (!entryInSeason(h) || h.gw !== gw || !h.picks) continue;
+      const { total } = computeEntryScore(h, stats);
+      if (total !== h.score) { h.score = total; changed = true; }
+    }
+  }
+  if (changed) saveHistory(hist);
+  return changed;
 }
 
 async function viewHistoryEntry(h) {
@@ -929,7 +954,7 @@ async function lbSavePlayerName(name) {
 
 async function lbMigrateLocalEntries(previousSlug, nextSlug, nextName, previousName) {
   try {
-    const localKeys = new Set(getHistory().filter(entryInLiveRound).map(lbEntryKey));
+    const localKeys = new Set(getHistory().filter(entryInSeason).map(lbEntryKey));
     for (const entry of getPendingSubmits()) localKeys.add(lbEntryKey(entry));
     if (!localKeys.size) {
       await lbUpdateMembers({ add: nextSlug, remove: previousSlug });
@@ -980,9 +1005,36 @@ function computeEntryScore(entry, stats) {
   return { total, pending };
 }
 
+// which board is showing: a gameweek number, or "season"
+function boardView() {
+  if (S.boardView === undefined) S.boardView = (currentRound() || liveRound())?.gw ?? "season";
+  return S.boardView;
+}
+
+function renderBoardNav() {
+  const view = boardView();
+  const gws = S.core.events.map((e) => e.gw);
+  const i = gws.indexOf(view);
+  const nav = $("board-nav");
+  nav.innerHTML = `
+    <button class="nav-btn" id="board-prev" ${view === "season" || i <= 0 ? "disabled" : ""}>‹</button>
+    <button class="nav-btn${view !== "season" ? " sel" : ""}" id="board-gw">${view === "season" ? "Gameweek" : gwLabel(view)}</button>
+    <button class="nav-btn" id="board-next" ${view === "season" || i >= gws.length - 1 ? "disabled" : ""}>›</button>
+    <button class="nav-btn${view === "season" ? " sel" : ""}" id="board-season">Season</button>`;
+  const go = (v) => { S.boardView = v; renderBoard(); };
+  $("board-prev").addEventListener("click", () => go(gws[i - 1]));
+  $("board-next").addEventListener("click", () => go(gws[i + 1]));
+  $("board-gw").addEventListener("click", () => {
+    if (view === "season") go((currentRound() || liveRound())?.gw ?? gws[0]);
+  });
+  $("board-season").addEventListener("click", () => go("season"));
+}
+
 async function renderBoard() {
   await retryPendingSubmits();
   $("board-name").value = playerName();
+  renderBoardNav();
+  const view = boardView();
   const body = $("board-body");
   body.innerHTML = `<div class="history-empty">Loading leaderboard…</div>`;
   const members = (await lbRead("members")) || [];
@@ -991,11 +1043,14 @@ async function renderBoard() {
     return;
   }
   const playersData = (await Promise.all(members.map((m) => lbRead(`p_${m}`)))).filter(Boolean);
+  if (S.boardView !== view) return;    // user switched view while loading
 
+  // one row per distinct entry (the same entry can sit under an old name too)
   const rowsByKey = {};
   const me = playerName();
   for (const pd of playersData) {
-    const entries = (pd.entries || []).filter((e) => entryInLiveRound(e) && entryOnTime(e));
+    const entries = (pd.entries || []).filter((e) => entryInSeason(e) && entryOnTime(e)
+      && (view === "season" || e.gw === view));
     for (const e of entries) {
       const stats = await loadGwStats(e.gw);
       const sc = computeEntryScore(e, stats);
@@ -1009,11 +1064,23 @@ async function renderBoard() {
       }
     }
   }
+  if (S.boardView !== view) return;
   const rows = Object.values(rowsByKey);
   if (!rows.length) {
-    body.innerHTML = `<div class="history-empty">No R16 teams on the board yet — enter a team to join, even while scores are still 0.</div>`;
+    body.innerHTML = view === "season"
+      ? `<div class="history-empty">No teams on the board this season yet.</div>`
+      : `<div class="history-empty">No ${gwLabel(view)} teams on the board yet — enter a team to join, even while scores are still 0.</div>`;
     return;
   }
+  if (view === "season") renderSeasonBoard(body, rows, me);
+  else renderGwBoard(body, rows, me);
+}
+
+function rankCell(i) {
+  return i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1;
+}
+
+function renderGwBoard(body, rows, me) {
   rows.sort((a, b) =>
     b.total - a.total
     || (a.pending === b.pending ? 0 : a.pending ? 1 : -1)
@@ -1029,7 +1096,7 @@ async function renderBoard() {
     row.className = "board-row" + (r.name === me ? " me" : "");
     row.title = "View team";
     row.innerHTML = `
-      <div class="board-rank">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</div>
+      <div class="board-rank">${rankCell(i)}</div>
       <div class="board-player">
         <div class="board-pname">${escapeHtml(name)}</div>
         <div class="board-chips">
@@ -1040,6 +1107,41 @@ async function renderBoard() {
       </div>
       <div class="board-total">${r.total}${r.pending ? '<span class="board-live">live</span>' : ""}</div>`;
     row.addEventListener("click", () => viewBoardEntry(r.entry, r.name));
+    body.appendChild(row);
+  });
+}
+
+// season table: each player's most recent on-time team per gameweek counts
+function renderSeasonBoard(body, rows, me) {
+  const byPlayer = {};
+  for (const r of rows) {
+    const p = (byPlayer[r.name] ||= { name: r.name, byGw: {} });
+    const prev = p.byGw[r.entry.gw];
+    if (!prev || (r.entry.ts || 0) > (prev.entry.ts || 0)) p.byGw[r.entry.gw] = r;
+  }
+  const table = Object.values(byPlayer).map((p) => {
+    const gwRows = Object.values(p.byGw).sort((a, b) => a.entry.gw - b.entry.gw);
+    return {
+      name: p.name,
+      gwRows,
+      total: gwRows.reduce((t, r) => t + r.total, 0),
+      pending: gwRows.some((r) => r.pending),
+    };
+  });
+  table.sort((a, b) => b.total - a.total || b.gwRows.length - a.gwRows.length);
+  body.innerHTML = "";
+  table.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "board-row" + (p.name === me ? " me" : "");
+    const chips = p.gwRows.map((r) =>
+      `<span class="bchip${r.pending ? " pend" : ""}">${escapeHtml(r.entry.label || "GW " + r.entry.gw)}: ${r.total}${r.pending ? " ⏳" : ""}</span>`).join("");
+    row.innerHTML = `
+      <div class="board-rank">${rankCell(i)}</div>
+      <div class="board-player">
+        <div class="board-pname">${escapeHtml(p.name)}</div>
+        <div class="board-chips">${chips}</div>
+      </div>
+      <div class="board-total">${p.total}${p.pending ? '<span class="board-live">live</span>' : ""}</div>`;
     body.appendChild(row);
   });
 }
@@ -1059,7 +1161,7 @@ async function viewBoardEntry(entry, name) {
   show("screen-results");
 }
 
-function goBoard() { renderBoard(); show("screen-board"); }
+function goBoard() { S.boardView = undefined; renderBoard(); show("screen-board"); }
 
 /* ---------------- results ---------------- */
 
@@ -1187,9 +1289,15 @@ function renderSubmitRetry(note, entry) {
 
 /* ---------------- wire-up ---------------- */
 
-function goHome() { renderHome(); show("screen-home"); }
+function goHome() {
+  renderHome();
+  show("screen-home");
+  refreshHistoryScores().then((changed) => {
+    if (changed && !$("screen-home").classList.contains("hidden")) renderHome();
+  }).catch((e) => console.warn("score refresh failed", e));
+}
 function goSetup(opts = {}) {
-  renderSetup({ ...opts, lockedGw: opts.lockedGw || LIVE_SITE_GW });
+  renderSetup({ ...opts, lockedGw: opts.lockedGw || liveRound()?.gw });
   show("screen-setup");
 }
 
@@ -1210,7 +1318,7 @@ async function init() {
       S.pendingSubmit = null;
     }
     // (re)submit all locally saved live-round teams under this name
-    for (const h of getHistory().filter(entryInLiveRound)) {
+    for (const h of getHistory().filter(entryInSeason)) {
       if (!h.picks) continue;
       queuePendingSubmit({
         id: h.id,

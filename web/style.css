@@ -354,6 +354,9 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
 .board-pname { font-weight: 800; font-size: 16px; margin-bottom: 5px; }
 .board-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .board-total { font-size: 26px; font-weight: 900; color: var(--gold); text-align: right; }
+.board-nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; }
+.board-nav .nav-btn.sel { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.board-nav .nav-btn:disabled { opacity: 0.35; cursor: default; }
 .board-total .board-live {
   display: block; font-size: 10px; font-weight: 700; color: #3ddc84;
   text-transform: uppercase; letter-spacing: 1px;

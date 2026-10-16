@@ -1,16 +1,17 @@
-"""Build the Spin XI app data for the 2025/26 Premier League season.
+"""Build the Spin XI app data.
 
-Two phases:
-  1. download  - snapshot the FPL API (bootstrap, fixtures, 38x gameweek live stats)
-                 into data/raw/ so the app keeps working after the API resets
-                 for the 26/27 season.
-  2. transform - merge FPL data with detailed player positions from the FotMob
-                 match JSONs in PyCharmMiscProject, and emit the JSON files the
-                 web app consumes into web/data/.
+Premier League 2026/27 (the live game) comes straight from the FPL API, so
+every stat, position and bonus point matches fantasy.premierleague.com:
 
-Usage:
-    python build_data.py            # download (skips existing raw files) + transform
-    python build_data.py transform  # transform only, from existing raw snapshots
+    python build_data.py fpl            # fetch the latest FPL data + rebuild (web/data/epl2627)
+    python build_data.py fpl-transform  # rebuild from the snapshots in data/raw/2627
+
+Archived competitions, built from our own match-events files:
+
+    python build_data.py                # Premier League 25/26 + World Cup 2026
+    python build_data.py epl            # Premier League 25/26 only
+    python build_data.py wc             # World Cup 2026 only
+    python build_data.py download       # 25/26 FPL snapshot (photos for the 25/26 build)
 """
 
 import csv
@@ -809,97 +810,155 @@ def transform_wc():
           f"{len(fix_out)} fixtures, {len(events)} rounds)")
 
 
-def transform_fpl():
-    """Legacy: build the per-gameweek stats from the FPL API snapshots."""
-    OUT.mkdir(parents=True, exist_ok=True)
-    bootstrap = json.loads((RAW / "bootstrap.json").read_text(encoding="utf-8"))
-    fixtures = json.loads((RAW / "fixtures.json").read_text(encoding="utf-8"))
+# ---------------- Premier League from the FPL API ----------------
+# The live game: every stat, position and bonus point comes straight from
+# fantasy.premierleague.com, so scores match FPL exactly.
+FPL_SEASON = "2026/27"
+FPL_COMP = "epl2627"                    # web/data/<comp>/, also the app's comp id
+FPL_RAW = RAW / "2627"                  # raw API snapshots for this season
 
-    positions = match_positions(bootstrap)
+# wheel colours for clubs not in EPL_COLORS (promoted / recently relegated)
+EXTRA_COLORS = {
+    "COV": "#59CBE8", "HUL": "#F5A12D", "IPS": "#0044A9", "LEI": "#003090",
+    "SOU": "#D71920", "SHU": "#EE2737", "WBA": "#122F67", "MID": "#E11B22",
+    "NOR": "#00A650", "WAT": "#FBEE23", "MIL": "#001D5E", "WRE": "#D71920",
+}
+EXTRA_DARK_TEXT = {"COV", "HUL", "WAT"}
 
-    teams = [{
-        "id": t["id"],
-        "name": t["name"],
-        "short": t["short_name"],
-        "code": t["code"],
-    } for t in bootstrap["teams"]]
 
-    fix_out = [{
-        "gw": f["event"],
-        "h": f["team_h"],
-        "a": f["team_a"],
-        "hs": f["team_h_score"],
-        "as": f["team_a_score"],
-        "ko": f["kickoff_time"],
-    } for f in fixtures if f["event"]]
+def download_fpl(raw=FPL_RAW):
+    """Snapshot the FPL API for the current season. Bootstrap and fixtures
+    are always refreshed; a gameweek's live stats are re-fetched until FPL
+    marks that gameweek finished and data-checked."""
+    raw.mkdir(parents=True, exist_ok=True)
+    bootstrap = fetch(f"{FPL_BASE}/bootstrap-static/")
+    (raw / "bootstrap.json").write_text(json.dumps(bootstrap), encoding="utf-8")
+    (raw / "fixtures.json").write_text(json.dumps(fetch(f"{FPL_BASE}/fixtures/")), encoding="utf-8")
+    now = time.time()
+    for ev in bootstrap["events"]:
+        path = raw / f"live_gw{ev['id']}.json"
+        if ev["deadline_time_epoch"] > now:
+            continue                    # not started yet, nothing to score
+        if path.exists() and ev["finished"] and ev["data_checked"]:
+            continue                    # final, already have it
+        print(f"downloading live_gw{ev['id']}.json ...", flush=True)
+        path.write_text(json.dumps(fetch(f"{FPL_BASE}/event/{ev['id']}/live/")), encoding="utf-8")
+        time.sleep(0.6)
+    print("FPL download complete")
 
-    # Per-gameweek, per-player, per-fixture stats from the live "explain" data
-    cat_by_id = {el["id"]: CAT_BY_TYPE[el["element_type"]] for el in bootstrap["elements"]}
-    season_totals = defaultdict(lambda: {"mp": 0, "gs": 0, "a": 0, "gp": 0, "pts": 0})
-    for gw in range(1, 39):
-        live = json.loads((RAW / f"live_gw{gw}.json").read_text(encoding="utf-8"))
-        gw_stats = {}
-        for el in live["elements"]:
-            fixtures_stats = []
-            for block in el.get("explain", []):
-                row = {}
-                for s in block.get("stats", []):
-                    key = STAT_KEYS.get(s["identifier"])
-                    if key:
-                        row[key] = s["value"]
-                if row.get("mp"):
-                    fixtures_stats.append(row)
-            if fixtures_stats:
-                gw_stats[str(el["id"])] = fixtures_stats
-                tot = season_totals[el["id"]]
-                for row in fixtures_stats:
-                    tot["mp"] += row.get("mp", 0)
-                    tot["gs"] += row.get("gs", 0)
-                    tot["a"] += row.get("a", 0)
-                    tot["gp"] += 1
-                    tot["pts"] += score_row(row, cat_by_id[el["id"]])
-        (OUT / f"gw{gw}.json").write_text(json.dumps(gw_stats), encoding="utf-8")
 
-    players = []
-    for el in bootstrap["elements"]:
-        tot = season_totals.get(el["id"], {"mp": 0, "gs": 0, "a": 0, "gp": 0, "pts": 0})
-        players.append({
-            "id": el["id"],
-            "code": el["code"],
-            "name": el["web_name"],
-            "full": f"{el['first_name']} {el['second_name']}".strip(),
-            "team": el["team"],
-            "type": el["element_type"],
-            "pos": positions[el["id"]],
-            "mins": tot["mp"],
-            "g": tot["gs"],
-            "a": tot["a"],
-            "gp": tot["gp"],
-            "pts": tot["pts"],
+def transform_fpl(raw=FPL_RAW, comp=FPL_COMP, season=FPL_SEASON):
+    """Build the app data from FPL API snapshots (bootstrap, fixtures and
+    per-gameweek live stats). Player ids, positions and every stat are FPL's
+    own; the build checks our scoring against FPL's points for every row."""
+    out = OUT / comp
+    out.mkdir(parents=True, exist_ok=True)
+    bootstrap = json.loads((raw / "bootstrap.json").read_text(encoding="utf-8"))
+    fixtures = json.loads((raw / "fixtures.json").read_text(encoding="utf-8"))
+
+    teams = []
+    for t in sorted(bootstrap["teams"], key=lambda t: t["name"]):
+        short = t["short_name"]
+        teams.append({
+            "id": t["id"], "name": t["name"], "short": short, "code": t["code"],
+            "color": EPL_COLORS.get(short) or EXTRA_COLORS.get(short, "#444444"),
+            "tcol": "#1a1a2e" if short in EPL_DARK_TEXT | EXTRA_DARK_TEXT else "#ffffff",
+            "badge": f"https://resources.premierleague.com/premierleague/badges/70/t{t['code']}.png",
         })
 
-    core = {
-        "season": "2025/26",
-        "teams": teams,
-        "players": players,
-        "fixtures": fix_out,
-        "events": [{
-            "gw": e["id"],
-            "name": e["name"],
-            "deadline": e["deadline_time"],
-            "finished": e["finished"],
-        } for e in bootstrap["events"]],
-    }
-    (OUT / "core.json").write_text(json.dumps(core), encoding="utf-8")
-    print(f"wrote {OUT / 'core.json'} ({len(players)} players, {len(fix_out)} fixtures) + 38 gameweek stat files")
+    # postponed fixtures have no gameweek until FPL reschedules them
+    fixtures_by_gw = defaultdict(list)
+    for f in fixtures:
+        if not f["event"]:
+            continue
+        done = f.get("finished_provisional") or f.get("finished")
+        fixtures_by_gw[f["event"]].append({
+            "gw": f["event"], "h": f["team_h"], "a": f["team_a"],
+            "hs": f["team_h_score"] if done else None,
+            "as": f["team_a_score"] if done else None,
+            "ko": f["kickoff_time"],
+        })
+
+    elements = [el for el in bootstrap["elements"] if el["element_type"] in CAT_BY_TYPE]
+    cat_by_id = {el["id"]: CAT_BY_TYPE[el["element_type"]] for el in elements}
+    season_totals = defaultdict(lambda: {"mp": 0, "gs": 0, "a": 0, "gp": 0, "pts": 0})
+    fix_out, events = [], []
+    rows_checked, mismatches = 0, []
+    for ev in bootstrap["events"]:
+        gw = ev["id"]
+        gw_fixtures = sorted(fixtures_by_gw.get(gw, []), key=lambda f: f["ko"] or "")
+        fix_out += gw_fixtures
+        gw_stats = {}
+        live_path = raw / f"live_gw{gw}.json"
+        live = json.loads(live_path.read_text(encoding="utf-8")) if live_path.exists() else {"elements": []}
+        for el in live["elements"]:
+            if el["id"] not in cat_by_id:
+                continue
+            fixture_rows = []
+            for block in el.get("explain", []):
+                row = {}
+                for st in block.get("stats", []):
+                    key = STAT_KEYS.get(st["identifier"])
+                    if key and st["value"]:
+                        row[key] = st["value"]
+                if not row:
+                    continue            # unused sub with nothing to score
+                row.setdefault("mp", 0)
+                fpl_pts = sum(st["points"] for st in block.get("stats", []))
+                ours = score_row(row, cat_by_id[el["id"]])
+                rows_checked += 1
+                if ours != fpl_pts:
+                    mismatches.append(f"GW{gw} player {el['id']}: ours {ours} vs FPL {fpl_pts} {row}")
+                fixture_rows.append(row)
+                tot = season_totals[el["id"]]
+                tot["mp"] += row["mp"]
+                tot["gs"] += row.get("gs", 0)
+                tot["a"] += row.get("a", 0)
+                tot["gp"] += 1 if row["mp"] else 0
+                tot["pts"] += ours
+            if fixture_rows:
+                gw_stats[str(el["id"])] = fixture_rows
+        (out / f"gw{gw}.json").write_text(json.dumps(gw_stats), encoding="utf-8")
+        kos = [f["ko"] for f in gw_fixtures if f["ko"]]
+        events.append({
+            "gw": gw, "name": ev["name"],
+            # entries lock at the gameweek's first kick-off (FPL's own deadline is earlier)
+            "deadline": min(kos) if kos else ev["deadline_time"],
+            "finished": bool(gw_fixtures) and all(f["hs"] is not None for f in gw_fixtures),
+        })
+
+    players = []
+    for el in elements:
+        tot = season_totals.get(el["id"], {"mp": 0, "gs": 0, "a": 0, "gp": 0, "pts": 0})
+        players.append({
+            "id": el["id"], "code": el["code"],
+            "name": el["web_name"],
+            "full": f"{el['first_name']} {el['second_name']}".strip(),
+            "team": el["team"], "type": el["element_type"], "pos": [],
+            "img": f"https://resources.premierleague.com/premierleague/photos/players/110x140/p{el['code']}.png",
+            "mins": tot["mp"], "g": tot["gs"], "a": tot["a"],
+            "gp": tot["gp"], "pts": tot["pts"],
+        })
+
+    core = {"season": f"Premier League {season}", "teams": teams, "players": players,
+            "fixtures": fix_out, "events": events}
+    (out / "core.json").write_text(json.dumps(core), encoding="utf-8")
+    print(f"wrote {out / 'core.json'} ({len(players)} players, {len(teams)} teams, "
+          f"{len(fix_out)} fixtures, {len(events)} gameweeks)")
+    print(f"scoring check: {rows_checked - len(mismatches)}/{rows_checked} player-fixture rows match FPL points")
+    for m in mismatches[:10]:
+        print("  MISMATCH", m)
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "transform"
     if cmd == "download":
         download()                      # snapshot the FPL API (bootstrap etc.)
-    elif cmd == "transform-fpl":
-        transform_fpl()                 # legacy: score from FPL API stats
+    elif cmd == "fpl":
+        download_fpl()                  # Premier League 26/27: fetch from the FPL API
+        transform_fpl()
+    elif cmd == "fpl-transform":
+        transform_fpl()                 # rebuild from the existing FPL snapshots
     elif cmd == "wc":
         transform_wc()                  # World Cup 2026 only
     elif cmd == "epl":

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spin XI — Football Wheel Game</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -86,6 +86,7 @@
         <button class="nav-btn" id="board-refresh">↻ Refresh</button>
       </div>
     </div>
+    <div class="board-nav" id="board-nav"></div>
     <div id="board-body"></div>
   </section>
 
@@ -96,7 +97,7 @@
       <div class="howto-card">
         <h3>1 · Spin &amp; pick your XI</h3>
         <ol>
-          <li>Hit <b>Play</b> on the live round and choose a formation.</li>
+          <li>Hit <b>Play</b> on the next gameweek and choose a formation.</li>
           <li><b>SPIN</b> the reel — it lands on a random team. Teams can come up more than once.</li>
           <li>Pick any player from that team — they fill the next open slot for their position
               (GK / DEF / MID / FWD). Each player can only be picked once.</li>
@@ -111,16 +112,18 @@
               <b>double points</b> (negatives too!). You can change your mind until you enter the team.</li>
           <li><b>Enter my Team</b> saves it and posts it to the 🏆 Leaderboard under your name
               (set your name on the Leaderboard tab first).</li>
-          <li>Enter as many teams as you like — every team goes on the board.</li>
+          <li>Enter as many teams as you like — every team goes on that gameweek's board.
+              Entries close at the gameweek's first kick-off.</li>
+          <li>On the <b>Season</b> board, your most recent team in each gameweek counts towards your total.</li>
           <li>Points appear as the real matches finish — ⏳ means games are still to be played
               and the score will keep updating.</li>
         </ol>
       </div>
     </div>
-    <h3 class="howto-sub">Scoring</h3>
+    <h3 class="howto-sub">Scoring — official Fantasy Premier League points</h3>
     <table class="score-table">
       <tr><th>Action</th><th>Points</th></tr>
-      <tr><td>Playing up to 60 minutes</td><td>1</td></tr>
+      <tr><td>Playing up to 60 minutes (excluding stoppage time)</td><td>1</td></tr>
       <tr><td>Playing 60 minutes or more</td><td>2</td></tr>
       <tr><td>Goal by a goalkeeper / defender / midfielder / forward</td><td>10 / 6 / 5 / 4</td></tr>
       <tr><td>Assist</td><td>3</td></tr>
@@ -130,16 +133,17 @@
       <tr><td>Penalty save</td><td>5</td></tr>
       <tr><td>Penalty miss</td><td>-2</td></tr>
       <tr><td>Every 2 goals conceded — goalkeeper or defender</td><td>-1</td></tr>
-      <tr><td>Defensive contribution — 10+ clearances, interceptions &amp; tackles (defender)
+      <tr><td>Defensive contribution — 10+ clearances, blocks, interceptions &amp; tackles (defender)
           or 12+ incl. recoveries (midfielder / forward)</td><td>2</td></tr>
-      <tr><td>Bonus — the 3 best-rated players in each match</td><td>3 / 2 / 1</td></tr>
+      <tr><td>Bonus — the top 3 players in each match on FPL's Bonus Points System</td><td>3 / 2 / 1</td></tr>
       <tr><td>Yellow card</td><td>-1</td></tr>
       <tr><td>Red card</td><td>-3</td></tr>
       <tr><td>Own goal</td><td>-2</td></tr>
       <tr><td><b>Captain</b> — all points doubled</td><td>×2</td></tr>
     </table>
-    <p class="howto-note">Player positions (GK / DEF / MID / FWD) reflect where each player has
-      actually been playing. Extra time in knockout games counts; penalty shootouts don't.</p>
+    <p class="howto-note">Every stat, position (GK / DEF / MID / FWD) and bonus point comes straight
+      from fantasy.premierleague.com, so each player scores exactly what they score in FPL.
+      In a double gameweek both matches count.</p>
   </section>
 
   <!-- ============ RESULTS ============ -->
@@ -162,6 +166,6 @@
   </div>
 </div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
