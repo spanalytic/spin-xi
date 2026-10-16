@@ -314,6 +314,56 @@ function entryOnTime(e) {
   return (e.ts || 0) <= roundDeadline(e.gw) + DEADLINE_GRACE_MS;
 }
 
+/* one team per player per gameweek: the first one entered on time counts.
+   A team entered at least 12 hours before the deadline earns one re-spin:
+   swap one player for a pick from a fresh spin, any time until kick-off. */
+const RESPIN_EARLY_MS = 12 * 60 * 60 * 1000;
+const byTs = (a, b) => (a.ts || 0) - (b.ts || 0);
+
+function respinEarned(base) {
+  return (base.ts || 0) <= roundDeadline(base.gw) - RESPIN_EARLY_MS;
+}
+
+// is `r` a fair re-spin of `base`: entered on time, base early enough, the
+// same team except one slot (refilled with a player of that position), and
+// the captain kept unless the captain was the player replaced
+function validRespin(base, r) {
+  const i = r.respinSlot;
+  const a = base.picks || [], b = r.picks || [];
+  const slot = (FORMATIONS[r.formation] || [])[i];
+  const p = S.playersById[b[i]];
+  if (r.gw !== base.gw || r.formation !== base.formation || !slot || !p) return false;
+  if (!respinEarned(base) || !entryOnTime(r) || (r.ts || 0) < (base.ts || 0)) return false;
+  if (a.length !== 11 || b.length !== 11 || a.includes(b[i])) return false;
+  if (b.some((id, k) => k !== i && id !== a[k])) return false;
+  if (TYPE_CAT[p.type] !== ROLES[slot[0]].cat) return false;
+  return base.captain === a[i] ? b.includes(r.captain) : r.captain === base.captain;
+}
+
+// the team that counts for one player in a gameweek: { entry, base }, where
+// entry is the re-spun team when they used their re-spin, else the base
+function countedEntry(entries, gw) {
+  const mine = entries.filter((e) => e.gw === gw && e.picks && entryOnTime(e));
+  const base = mine.filter((e) => !e.respinOf).sort(byTs)[0];
+  if (!base) return null;
+  const respin = mine.filter((e) => e.respinOf === base.id).sort(byTs)[0];
+  return { entry: respin && validRespin(base, respin) ? respin : base, base };
+}
+
+// the signed-in player's entries in the live competition
+function myEntries() {
+  return signedIn() ? A.profile.entries.filter(entryInSeason) : [];
+}
+
+// the team a signed-in player can still re-spin for this gameweek, or null
+function respinnable(gw) {
+  if (!entriesOpen(gw)) return null;
+  const entries = myEntries();
+  const c = countedEntry(entries, gw);
+  if (!c || !respinEarned(c.base) || entries.some((e) => e.respinOf === c.base.id)) return null;
+  return c.base;
+}
+
 // the gameweek open for entries: the next one whose first kick-off is still
 // ahead (falls back to the last gameweek once the season is over)
 function liveRound() {
@@ -363,11 +413,13 @@ function renderLiveCard() {
       <span>First kick-off <b>${fmt}</b></span>
       <span class="countdown">${cd}</span>
     </div>
-    ${open
-      ? `<button class="big-btn lime" id="live-play">Enter your ${ev.short || "GW " + ev.gw} team</button>`
-      : `<div class="entries-closed">Entries are closed. The first game has kicked off.</div>`}`;
+    ${open ? liveEntryHtml(ev) : `<div class="entries-closed">Entries are closed. The first game has kicked off.</div>`}`;
   const lp = $("live-play");
   if (lp) lp.addEventListener("click", () => goSetup({ lockedGw: ev.gw }));
+  const lv = $("live-view");
+  if (lv) lv.addEventListener("click", () => viewHistoryEntry(countedEntry(myEntries(), ev.gw).entry));
+  const lr = $("live-respin");
+  if (lr) lr.addEventListener("click", () => startRespin(respinnable(ev.gw)));
 
   const fx = S.core.fixtures.filter((f) => f.gw === ev.gw);
   fc.classList.toggle("hidden", fx.length === 0);
@@ -384,15 +436,42 @@ function renderLiveCard() {
   }).join("")}</div>`;
 }
 
+// the live round's call to action: enter a team, or view it and re-spin
+function liveEntryHtml(ev) {
+  const short = ev.short || "GW " + ev.gw;
+  const c = countedEntry(myEntries(), ev.gw);
+  if (!c) {
+    const early = roundDeadline(ev.gw) - RESPIN_EARLY_MS;
+    const tip = AUTH_ON && Date.now() < early
+      ? `<p class="respin-tip">Enter by <b>${new Date(early).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}</b> to earn a re-spin you can use right up to kick-off.</p>`
+      : "";
+    return `<button class="big-btn lime" id="live-play">Enter your ${short} team</button>${tip}`;
+  }
+  const respin = respinnable(ev.gw);
+  const note = respin ? "You entered early, so you have <b>one re-spin</b>: swap one player for a pick from a fresh spin."
+    : respinEarned(c.base) ? "You've used your re-spin."
+    : "Teams entered 12+ hours before the deadline get a re-spin. Yours was entered later.";
+  return `<div class="live-actions">
+      <button class="big-btn lime" id="live-view">View your ${short} team</button>
+      ${respin ? `<button class="big-btn gold" id="live-respin">Use your re-spin</button>` : ""}
+    </div>
+    ${note ? `<p class="respin-tip">${note}</p>` : ""}`;
+}
+
 function renderHome() {
   renderLiveCard();
   const hist = getHistory().filter(entryInSeason).sort((x, y) => y.ts - x.ts);
   const entries = hist.length;
   const best = hist.reduce((m, h) => Math.max(m, h.score), 0);
-  // season total: your most recent team in each gameweek counts
-  const latestByGw = {};
-  for (const h of hist) if (!(h.gw in latestByGw)) latestByGw[h.gw] = h.score;
-  const seasonTotal = Object.values(latestByGw).reduce((t, x) => t + x, 0);
+  // season total: the team that counts in each gameweek (first one, or its re-spin)
+  const counted = new Set(), replaced = new Set();
+  for (const gw of new Set(hist.map((h) => h.gw))) {
+    const c = countedEntry(hist, gw);
+    if (!c) continue;
+    counted.add(c.entry.id);
+    if (c.entry !== c.base) replaced.add(c.base.id);
+  }
+  const seasonTotal = hist.filter((h) => counted.has(h.id)).reduce((t, h) => t + h.score, 0);
 
   $("season-summary").classList.toggle("hidden", entries === 0);
   $("season-summary").innerHTML = entries === 0 ? "" : `
@@ -410,9 +489,13 @@ function renderHome() {
     const row = document.createElement("div");
     row.className = "history-row";
     const date = new Date(h.ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const tag = replaced.has(h.id) ? "before re-spin"
+      : counted.has(h.id) ? (h.respinOf ? "re-spun" : "")
+      : "practice";
     row.innerHTML = `
       <div class="history-gw">${h.label || "GW " + h.gw}</div>
       <div class="history-meta">${COMP_LABELS[entryComp(h)]} &middot; ${h.formation} &middot; picked ${date}
+        ${tag ? `<span class="bchip">${tag}</span>` : ""}
         ${teamFaces(h.picks)}</div>
       <div class="history-score">${h.score}<small>pts</small></div>
       <button class="history-del" title="Delete">✕</button>`;
@@ -460,6 +543,14 @@ async function viewHistoryEntry(h) {
     role, x, y, player: S.playersById[h.picks[i]] || null,
   }));
   const total = renderResults({ gw: h.gw, formation: h.formation, slots, captain: h.captain }, stats, { readonly: true });
+  const base = respinnable(h.gw);
+  if (base && base.id === h.id) {
+    const note = document.createElement("div");
+    note.className = "submit-note";
+    note.innerHTML = `<button class="nav-btn sel">Use your re-spin</button> Swap one player for a pick from a fresh spin, any time before kick-off.`;
+    note.querySelector("button").addEventListener("click", () => startRespin(base));
+    $("results-head").appendChild(note);
+  }
   // fixtures may have finished since this team was saved — refresh the score
   if (total !== h.score) {
     saveHistory(getHistory().map((x) => (x.id === h.id ? { ...x, score: total } : x)));
@@ -501,6 +592,8 @@ function renderSetup(opts = {}) {
   $("setup-step-gw").classList.toggle("hidden", locked);
   $("gw-grid").classList.toggle("hidden", locked);
   $("setup-closed-note").classList.toggle("hidden", !(locked && !entriesOpen(opts.lockedGw)));
+  const entered = locked && entriesOpen(opts.lockedGw) && countedEntry(myEntries(), opts.lockedGw);
+  $("setup-practice-note").classList.toggle("hidden", !entered);
   $("setup-step-formation").textContent = locked
     ? `${gwLabel(opts.lockedGw)} — choose your formation`
     : "2 · Choose your formation";
@@ -546,25 +639,29 @@ function updateStartBtn() {
 
 /* ---------------- game ---------------- */
 
-async function startGame() {
-  const { gw, formation } = S.setup;
-  await loadGwStats(gw);
-  // the wheel only offers teams that have a fixture in this round
+// the wheel only offers teams that have a fixture in this round
+function roundWheelTeams(gw) {
   const inRound = new Set();
   for (const f of S.core.fixtures) {
     if (f.gw === gw && f.h && f.a) { inRound.add(f.h); inRound.add(f.a); }
   }
-  let wheelTeams = S.core.teams.filter((t) => inRound.has(t.id));
-  if (wheelTeams.length < 2) wheelTeams = S.core.teams;
+  const teams = S.core.teams.filter((t) => inRound.has(t.id));
+  return teams.length < 2 ? S.core.teams : teams;
+}
+
+async function startGame() {
+  const { gw, formation } = S.setup;
+  await loadGwStats(gw);
   S.game = {
     gw, formation,
     slots: FORMATIONS[formation].map(([role, x, y]) => ({ role, x, y, player: null })),
-    wheelTeams,
+    wheelTeams: roundWheelTeams(gw),
     captain: null,
     currentClub: null,
   };
   S.placing = null;
   $("wheel-result").innerHTML = "Spin to get your first club!";
+  $("score-btn").textContent = "Enter my Team";
   $("score-btn").classList.add("hidden");
   $("spin-btn").disabled = false;
   renderPitch();
@@ -573,8 +670,76 @@ async function startGame() {
   show("screen-game");
 }
 
+/* ---------------- re-spin ----------------
+   The player taps the one player to replace, spins, and picks from the club
+   it lands on. The club is remembered on this device as soon as the wheel
+   is spun, so leaving and coming back can't fish for a better one. */
+
+const RESPIN_KEY = "spinxi_respin_v1";
+function respinMemo(baseId) {
+  try { return (JSON.parse(localStorage.getItem(RESPIN_KEY)) || {})[baseId] || null; }
+  catch { return null; }
+}
+function setRespinMemo(baseId, value) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(RESPIN_KEY)) || {}; } catch {}
+  if (value) all[baseId] = value; else delete all[baseId];
+  localStorage.setItem(RESPIN_KEY, JSON.stringify(all));
+}
+
+async function startRespin(base) {
+  if (!base) return;
+  if (entryComp(base) !== S.comp) await loadComp(entryComp(base));
+  await loadGwStats(base.gw);
+  S.game = {
+    gw: base.gw,
+    formation: base.formation,
+    slots: FORMATIONS[base.formation].map(([role, x, y], i) => ({
+      role, x, y, player: S.playersById[base.picks[i]] || null,
+    })),
+    wheelTeams: roundWheelTeams(base.gw),
+    captain: base.captain,
+    currentClub: null,
+    respin: { base, slot: null },
+  };
+  S.placing = null;
+  $("score-btn").textContent = "Enter re-spun team";
+  $("score-btn").classList.add("hidden");
+  resetSpinner();
+  show("screen-game");
+  // already spun on this device: carry on with the club it landed on
+  const memo = respinMemo(base.id);
+  const team = memo && S.teamsById[memo.team];
+  if (team && S.game.slots[memo.slot]) {
+    chooseRespinSlot(memo.slot);
+    S.game.respin.spun = true;
+    $("spin-btn").disabled = true;
+    onWheelLanded(team);
+    return;
+  }
+  $("spin-btn").disabled = true;
+  renderPitch();
+  renderGameStatus();
+}
+
+// pick (or change) the player to replace; only allowed before spinning
+function chooseRespinSlot(i) {
+  const g = S.game, r = g.respin;
+  if (r.slot !== null) g.slots[r.slot].player = r.removed;
+  const slot = g.slots[i];
+  r.slot = i;
+  r.removed = slot.player;
+  slot.player = null;
+  g.captain = r.base.captain === r.removed?.id ? null : r.base.captain;
+  $("spin-btn").disabled = false;
+  renderPitch();
+  renderGameStatus();
+}
+
 function pickedIds() {
-  return new Set(S.game.slots.filter((s) => s.player).map((s) => s.player.id));
+  const ids = new Set(S.game.slots.filter((s) => s.player).map((s) => s.player.id));
+  if (S.game.respin?.removed) ids.add(S.game.respin.removed.id);   // a re-spin must change the player
+  return ids;
 }
 function vacantSlots() {
   return S.game.slots.filter((s) => !s.player);
@@ -598,6 +763,22 @@ function renderGameStatus() {
     <span><b>${gwLabel(S.game.gw)}</b> &middot; ${S.game.formation}</span>
     <span class="status-count">${n}<small> / 11 picked</small></span>`;
   $("captain-banner").classList.toggle("hidden", !(n === 11 && !S.game.captain));
+  const r = S.game.respin;
+  if (r && !r.spun) {
+    $("score-btn").classList.add("hidden");
+    $("wheel-result").innerHTML = r.slot === null
+      ? `<b>Re-spin:</b> tap the player you want to replace.`
+      : `Spin for a new ${CAT_LABEL[ROLES[S.game.slots[r.slot].role].cat].toLowerCase()} to replace <b>${escapeHtml(r.removed.name)}</b>. Tap someone else to change your mind.`;
+    return;
+  }
+  if (n === 11 && r) {
+    $("spin-btn").disabled = true;
+    $("score-btn").classList.toggle("hidden", !S.game.captain);
+    $("wheel-result").innerHTML = S.game.captain
+      ? `<b>${escapeHtml(S.game.slots[r.slot].player.name)}</b> is in. Enter the team to use your re-spin.`
+      : `<b>Team complete!</b> Your captain was swapped out, so tap a player to pick a new one.`;
+    return;
+  }
   if (n === 11) {
     $("spin-btn").disabled = true;
     if (!S.game.captain) {
@@ -679,7 +860,14 @@ function renderPitch() {
     place(el, i);
     if (slot.player) {
       const isCap = S.game.captain === slot.player.id;
-      const pickingCaptain = filledCount() === 11;
+      const r = S.game.respin;
+      const choosingRespin = r && !r.spun;
+      const pickingCaptain = filledCount() === 11 && !choosingRespin && (!r || r.base.captain === r.removed?.id);
+      if (choosingRespin) {
+        el.classList.add("respin-select");
+        el.title = "Replace this player";
+        el.addEventListener("click", () => chooseRespinSlot(i));
+      }
       if (pickingCaptain) {
         el.classList.add("cap-select");
         if (isCap) el.classList.add("cap-picked");
@@ -747,6 +935,12 @@ function spinWheel() {
 
   const teams = wheelTeams();
   const target = teams[Math.floor(Math.random() * teams.length)];
+  const r = S.game.respin;
+  if (r) {
+    r.spun = true;
+    setRespinMemo(r.base.id, { slot: r.slot, team: target.id });
+    renderPitch();
+  }
   const box = $("spinner");
   const strip = $("reel-strip");
 
@@ -962,7 +1156,7 @@ const A = { mod: null, user: null, profile: null, failed: false, ready: Promise.
 
 function startAuth() {
   if (!AUTH_ON) return;
-  A.ready = import("./login.js?v=15")
+  A.ready = import("./login.js?v=16")
     .then((mod) => { A.mod = mod; return mod.start(window.SPINXI_FIREBASE, onAuthChange); })
     .catch((e) => { console.warn("sign-in unavailable", e); A.failed = true; renderAccount(); });
 }
@@ -978,9 +1172,11 @@ async function onAuthChange(user) {
   renderAccount();
   closeSignIn();
   if (signedIn()) {
-    if (mergeRemoteHistory() && !$("screen-home").classList.contains("hidden")) renderHome();
+    mergeRemoteHistory();
     await retryPendingSubmits();
   }
+  // the live card shows this player's team and re-spin
+  if (!$("screen-home").classList.contains("hidden")) renderHome();
   if (!$("screen-board").classList.contains("hidden")) renderBoard();
   if (!$("screen-setup").classList.contains("hidden")) renderSetup(S.setupOpts || {});
 }
@@ -1134,6 +1330,7 @@ function normaliseEntry(entry) {
     picks: entry.picks,
     captain: entry.captain,
     ts: entry.ts,
+    ...(entry.respinOf ? { respinOf: entry.respinOf, respinSlot: entry.respinSlot } : {}),
   };
 }
 function entryTimeLabel(ts) {
@@ -1395,27 +1592,34 @@ async function renderBoard() {
     return;
   }
 
-  // one row per distinct entry (the same entry can sit under an old name too)
-  const rowsByKey = {};
+  // each team once (the same team can sit under an old name too), then the
+  // team that counts for each player in each gameweek
+  const byKey = {};
   const me = myOwner();
   for (const pd of playersData) {
-    const entries = (pd.entries || []).filter((e) => entryInSeason(e) && entryOnTime(e)
-      && (view === "season" || e.gw === view));
-    for (const e of entries) {
-      const stats = await loadGwStats(e.gw);
-      const sc = computeEntryScore(e, stats);
-      const row = { owner: pd.owner, name: pd.name || "Player", entry: e, total: sc.total, pending: sc.pending };
+    for (const e of pd.entries || []) {
+      if (!entryInSeason(e) || !entryOnTime(e) || (view !== "season" && e.gw !== view)) continue;
       const key = lbEntryKey(e);
-      const prev = rowsByKey[key];
-      const entryTs = e.ts || 0;
-      const prevTs = prev?.entry?.ts || 0;
-      if (!prev || (row.owner === me && prev.owner !== me) || entryTs >= prevTs) {
-        rowsByKey[key] = row;
+      const prev = byKey[key];
+      if (!prev || (pd.owner === me && prev.owner !== me) || (e.ts || 0) >= (prev.e.ts || 0)) {
+        byKey[key] = { owner: pd.owner, name: pd.name || "Player", e };
       }
     }
   }
+  const byOwner = {};
+  for (const { owner, name, e } of Object.values(byKey)) {
+    (byOwner[owner] ||= { name, entries: [] }).entries.push(e);
+  }
+  const rows = [];
+  for (const [owner, p] of Object.entries(byOwner)) {
+    for (const gw of new Set(p.entries.map((e) => e.gw))) {
+      const c = countedEntry(p.entries, gw);
+      if (!c) continue;
+      const sc = computeEntryScore(c.entry, await loadGwStats(gw));
+      rows.push({ owner, name: p.name, entry: c.entry, base: c.base, total: sc.total, pending: sc.pending });
+    }
+  }
   if (S.boardView !== view) return;
-  const rows = Object.values(rowsByKey);
   if (!rows.length) {
     body.innerHTML = view === "season"
       ? `<div class="history-empty">No teams on the board this season yet.</div>`
@@ -1442,28 +1646,26 @@ function renderGwBoard(body, rows, me) {
   rows.sort((a, b) =>
     b.total - a.total
     || (a.pending === b.pending ? 0 : a.pending ? 1 : -1)
-    || (a.entry.ts || 0) - (b.entry.ts || 0));
-  const seen = {};
+    || (a.base.ts || 0) - (b.base.ts || 0));
   body.innerHTML = "";
   const list = document.createElement("div");
   list.className = "board-list";
   body.appendChild(list);
   rows.forEach((r, i) => {
-    const count = (seen[r.owner] = (seen[r.owner] || 0) + 1);
-    const name = count > 1 ? `${r.name} #${count}` : r.name;
     const label = r.entry.label || "GW " + r.entry.gw;
-    const time = entryTimeLabel(r.entry.ts);
+    const time = entryTimeLabel(r.base.ts);
     const row = document.createElement("div");
     row.className = "board-row" + (r.owner === me ? " me" : "");
     row.title = "View team";
     row.innerHTML = `
       ${rankCell(i)}
       <div class="board-player">
-        <div class="board-pname">${escapeHtml(name)}</div>
+        <div class="board-pname">${escapeHtml(r.name)}</div>
         <div class="board-chips">
           <span class="bchip">${escapeHtml(label)}</span>
           <span class="bchip">${escapeHtml(r.entry.formation || "Formation")}</span>
           ${time ? `<span class="bchip">${escapeHtml(time)}</span>` : ""}
+          ${r.entry !== r.base ? `<span class="bchip">re-spun</span>` : ""}
         </div>
       </div>
       ${teamFaces(r.entry.picks, r.entry.captain, "board-faces")}
@@ -1473,16 +1675,14 @@ function renderGwBoard(body, rows, me) {
   });
 }
 
-// season table: each player's most recent on-time team per gameweek counts
+// season table: each player's counted team in every gameweek adds up
 function renderSeasonBoard(body, rows, me) {
   const byPlayer = {};
   for (const r of rows) {
-    const p = (byPlayer[r.owner] ||= { owner: r.owner, name: r.name, byGw: {} });
-    const prev = p.byGw[r.entry.gw];
-    if (!prev || (r.entry.ts || 0) > (prev.entry.ts || 0)) p.byGw[r.entry.gw] = r;
+    (byPlayer[r.owner] ||= { owner: r.owner, name: r.name, gwRows: [] }).gwRows.push(r);
   }
   const table = Object.values(byPlayer).map((p) => {
-    const gwRows = Object.values(p.byGw).sort((a, b) => a.entry.gw - b.entry.gw);
+    const gwRows = p.gwRows.sort((a, b) => a.entry.gw - b.entry.gw);
     return {
       owner: p.owner,
       name: p.name,
@@ -1610,6 +1810,9 @@ async function finishGame() {
   const stats = await loadGwStats(S.game.gw);
   const total = renderResults(S.game, stats);
   const entryId = Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+  const respin = S.game.respin;
+  // a signed-in player's first team for the gameweek is the one that counts
+  const practice = !respin && !!countedEntry(myEntries(), S.game.gw);
 
   const entry = {
     id: entryId,
@@ -1621,6 +1824,10 @@ async function finishGame() {
     captain: S.game.captain,
     ts: Date.now(),
   };
+  if (respin) {
+    entry.respinOf = respin.base.id;
+    entry.respinSlot = respin.slot;
+  }
   const hist = getHistory();
   hist.push({
     id: entryId,
@@ -1639,12 +1846,19 @@ async function finishGame() {
   $("results-head").appendChild(note);
   if (!entriesOpen(entry.gw)) {
     note.innerHTML = "Entries had closed for this round, so this is saved as a practice team and isn't on the leaderboard.";
+  } else if (practice) {
+    note.innerHTML = `You'd already entered your ${escapeHtml(entry.label)} team, and the first one counts, so this is saved as a practice team.`;
   } else if (playerName()) {
     queuePendingSubmit(entry);
     note.textContent = "Submitting to leaderboard…";
     lbSubmit(entry).then((ok) => {
       if (ok) {
-        note.innerHTML = `On the leaderboard as <b>${escapeHtml(playerName())}</b>`;
+        if (respin) setRespinMemo(respin.base.id, null);
+        note.innerHTML = respin
+          ? `Re-spin used. Your new team is on the leaderboard as <b>${escapeHtml(playerName())}</b>`
+          : `On the leaderboard as <b>${escapeHtml(playerName())}</b>`
+            + (AUTH_ON && respinEarned(entry) ? `. You entered early, so you have one re-spin until kick-off.` : "");
+        if (!$("screen-home").classList.contains("hidden")) renderHome();
       } else {
         renderSubmitRetry(note, entry);
       }
@@ -1776,7 +1990,10 @@ async function init() {
   $("spin-btn").addEventListener("click", spinWheel);
   $("score-btn").addEventListener("click", finishGame);
   $("abandon-btn").addEventListener("click", () => {
-    if (confirm("Abandon this team? Your picks will be lost.")) { S.game = null; goHome(); }
+    const msg = S.game?.respin
+      ? "Leave the re-spin? It isn't used until you enter the team, and any club you've spun stays the same."
+      : "Abandon this team? Your picks will be lost.";
+    if (confirm(msg)) { S.game = null; goHome(); }
   });
   $("results-again").addEventListener("click", () => goSetup());
   $("results-home").addEventListener("click", goHome);

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -63,6 +63,9 @@
     </div>
     <div id="setup-closed-note" class="closed-note hidden">Entries for this round closed at the
       first kick-off — this team will be practice only and won't appear on the leaderboard.</div>
+    <div id="setup-practice-note" class="closed-note hidden">You've already entered your team for this
+      gameweek. Only your first team counts, so another one is practice. Use your re-spin from the
+      Home page if you earned one.</div>
     <h2 class="setup-step" id="setup-step-gw">1 · Choose a gameweek</h2>
     <div id="gw-grid" class="gw-grid"></div>
     <h2 class="setup-step" id="setup-step-formation">2 · Choose your formation</h2>
@@ -130,9 +133,12 @@
               <b>double points</b> (negatives too!). You can change your mind until you enter the team.</li>
           <li><b>Enter my Team</b> saves it and posts it to the Leaderboard under your name
               (set your name on the Leaderboard tab first).</li>
-          <li>Enter as many teams as you like — every team goes on that gameweek's board.
+          <li>One team per gameweek: your <b>first</b> team is the one that counts. Any more are practice.
               Entries close at the gameweek's first kick-off.</li>
-          <li>On the <b>Season</b> board, your most recent team in each gameweek counts towards your total.</li>
+          <li><b>Enter early, earn a re-spin.</b> If your team is in at least 12 hours before the deadline,
+              you can re-spin once, any time before kick-off: tap one player to drop, spin, and pick a
+              replacement from the club it lands on. Handy when the team news comes out.</li>
+          <li>On the <b>Season</b> board, your team in each gameweek counts towards your total.</li>
           <li>Points appear as the real matches finish — a <b>live</b> tag means games are still to be played
               and the score will keep updating.</li>
         </ol>
@@ -193,6 +199,6 @@
 </div>
 
 <script src="firebase-config.js?v=15"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
