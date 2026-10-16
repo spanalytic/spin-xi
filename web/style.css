@@ -165,6 +165,9 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
   border-radius: 999px; padding: 4px 12px; font-weight: 600; color: #fff; font-size: 13px;
 }
 .hero-sub { color: rgba(255, 255, 255, 0.7); margin-bottom: 18px; }
+.live-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.respin-tip { margin-top: 12px; max-width: 460px; color: rgba(255, 255, 255, 0.72); font-size: 13px; position: relative; }
+.respin-tip b { color: #fff; }
 .entries-closed {
   display: inline-flex; align-items: center; gap: 8px;
   background: rgba(229, 72, 77, 0.16); border: 1px solid rgba(229, 72, 77, 0.5);
@@ -329,6 +332,8 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
   display: flex; align-items: center; justify-content: center;
   border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3);
 }
+.slot.respin-select { cursor: pointer; }
+.slot.respin-select:hover .disc { box-shadow: 0 0 0 6px rgba(229, 72, 77, 0.45); border-color: #e5484d; }
 .slot.cap-select { cursor: pointer; }
 .slot.cap-select:hover .disc { box-shadow: 0 0 0 6px rgba(255, 197, 61, 0.45); }
 .slot.cap-select.cap-prompt .disc { animation: pulse 1s infinite; border-color: var(--gold); }

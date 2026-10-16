@@ -4,6 +4,8 @@ rules_version = '2';
 // Anyone can read the board; a signed-in player can only write their own
 // document, can add teams but never edit or delete them, and every team is
 // stamped with the server's time (so entries after the deadline show as late).
+// A re-spin is a new team that names the earlier team it re-spins and may
+// differ from it in that one slot only; the site checks the 12-hour rule.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -11,8 +13,9 @@ service cloud.firestore {
       return n is string && n.size() > 0 && n.size() <= 20;
     }
 
-    function validEntry(e) {
-      return e.keys().hasOnly(['comp', 'label', 'gw', 'formation', 'picks', 'captain', 'at'])
+    function validEntry(e, before) {
+      return e.keys().hasOnly(['comp', 'label', 'gw', 'formation', 'picks', 'captain', 'at',
+                               'respinOf', 'respinSlot'])
         && e.keys().hasAll(['comp', 'gw', 'formation', 'picks', 'at'])
         && e.comp is string && e.comp.size() <= 12
         && (!('label' in e) || (e.label is string && e.label.size() <= 40))
@@ -20,7 +23,34 @@ service cloud.firestore {
         && e.formation is string && e.formation.size() <= 10
         && e.picks is list && e.picks.size() == 11
         && (!('captain' in e) || e.captain == null || e.captain is int)
-        && e.at == request.time;
+        && e.at == request.time
+        && (!('respinOf' in e) || validRespin(e, before))
+        && (('respinOf' in e) == ('respinSlot' in e));
+    }
+
+    // a re-spin: same gameweek and formation as an earlier (non-re-spin)
+    // team of this player, with every pick kept except the re-spun slot
+    function validRespin(e, before) {
+      return e.respinOf is string && e.respinOf in before
+        && sameTeamButOne(e, before[e.respinOf]);
+    }
+
+    function sameTeamButOne(e, b) {
+      return !('respinOf' in b)
+        && b.comp == e.comp && b.gw == e.gw && b.formation == e.formation
+        && e.respinSlot is int && e.respinSlot >= 0 && e.respinSlot <= 10
+        && e.picks[e.respinSlot] != b.picks[e.respinSlot]
+        && (e.respinSlot == 0 || e.picks[0] == b.picks[0])
+        && (e.respinSlot == 1 || e.picks[1] == b.picks[1])
+        && (e.respinSlot == 2 || e.picks[2] == b.picks[2])
+        && (e.respinSlot == 3 || e.picks[3] == b.picks[3])
+        && (e.respinSlot == 4 || e.picks[4] == b.picks[4])
+        && (e.respinSlot == 5 || e.picks[5] == b.picks[5])
+        && (e.respinSlot == 6 || e.picks[6] == b.picks[6])
+        && (e.respinSlot == 7 || e.picks[7] == b.picks[7])
+        && (e.respinSlot == 8 || e.picks[8] == b.picks[8])
+        && (e.respinSlot == 9 || e.picks[9] == b.picks[9])
+        && (e.respinSlot == 10 || e.picks[10] == b.picks[10]);
     }
 
     function validEntryId(id) {
@@ -36,7 +66,7 @@ service cloud.firestore {
         && (d.addedKeys().size() == 0
             || (d.addedKeys() == [last].toSet()
                 && validEntryId(last)
-                && validEntry(after[last])));
+                && validEntry(after[last], before)));
     }
 
     match /players/{uid} {

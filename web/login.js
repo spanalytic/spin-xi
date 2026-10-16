@@ -4,10 +4,11 @@
 
    Firestore layout (see firestore.rules):
      players/{uid}  { name, updated, last, entries: { <entryId>: {comp, label, gw,
-                      formation, picks, captain, at} } }
+                      formation, picks, captain, at, respinOf?, respinSlot?} } }
        `at` is the server's clock, so an entry's time can't be faked.
        Entries can be added (one per write, `last` names it) but never
-       changed or removed.
+       changed or removed. A re-spin is a new entry naming the team it
+       re-spins (`respinOf`) and the one slot it changed (`respinSlot`).
      legacy/{slug}  { uid }  links a pre-sign-in leaderboard name (textdb)
                     to the account that claimed it, so old teams stay put.
    ================================================================ */
@@ -120,6 +121,10 @@ export async function submitEntry(entry) {
     captain: entry.captain ?? null,
     at: fb.f.serverTimestamp(),
   };
+  if (entry.respinOf) {
+    value.respinOf = entry.respinOf;
+    value.respinSlot = entry.respinSlot;
+  }
   await fb.f.updateDoc(ref, new fb.f.FieldPath("entries", entry.id), value,
     "last", entry.id, "updated", fb.f.serverTimestamp());
 }
@@ -150,6 +155,7 @@ function readPlayer(uid, data) {
     picks: e.picks,
     captain: e.captain,
     ts: e.at?.toMillis ? e.at.toMillis() : 0,
+    ...(e.respinOf ? { respinOf: e.respinOf, respinSlot: e.respinSlot } : {}),
   }));
   return { uid, name: data.name || "Player", entries };
 }
