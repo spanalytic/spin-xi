@@ -3,22 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spin XI — Football Wheel Game</title>
-<link rel="stylesheet" href="style.css?v=11">
+<title>Spin XI — Premier League wheel game</title>
+<meta name="theme-color" content="#0b1320">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
 <header class="topbar">
-  <div class="brand" id="brand-home">
-    <span class="brand-spin">SPIN</span><span class="brand-xi">XI</span>
+  <div class="brand" id="brand-home" title="Spin XI home">
+    <svg class="brand-logo" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<circle cx="32" cy="32" r="31.5" fill="#0b1320"/>
+<path d="M24.49 3.99A29 29 0 0 1 39.51 3.99L36.92 13.65A19 19 0 0 0 27.08 13.65Z" fill="#c6f432"/><path d="M39.51 3.99A29 29 0 0 1 52.51 11.49L45.44 18.56A19 19 0 0 0 36.92 13.65Z" fill="#1fc16b"/><path d="M52.51 11.49A29 29 0 0 1 60.01 24.49L50.35 27.08A19 19 0 0 0 45.44 18.56Z" fill="#c6f432"/><path d="M60.01 24.49A29 29 0 0 1 60.01 39.51L50.35 36.92A19 19 0 0 0 50.35 27.08Z" fill="#1fc16b"/><path d="M60.01 39.51A29 29 0 0 1 52.51 52.51L45.44 45.44A19 19 0 0 0 50.35 36.92Z" fill="#c6f432"/><path d="M52.51 52.51A29 29 0 0 1 39.51 60.01L36.92 50.35A19 19 0 0 0 45.44 45.44Z" fill="#1fc16b"/><path d="M39.51 60.01A29 29 0 0 1 24.49 60.01L27.08 50.35A19 19 0 0 0 36.92 50.35Z" fill="#c6f432"/><path d="M24.49 60.01A29 29 0 0 1 11.49 52.51L18.56 45.44A19 19 0 0 0 27.08 50.35Z" fill="#1fc16b"/><path d="M11.49 52.51A29 29 0 0 1 3.99 39.51L13.65 36.92A19 19 0 0 0 18.56 45.44Z" fill="#c6f432"/><path d="M3.99 39.51A29 29 0 0 1 3.99 24.49L13.65 27.08A19 19 0 0 0 13.65 36.92Z" fill="#1fc16b"/><path d="M3.99 24.49A29 29 0 0 1 11.49 11.49L18.56 18.56A19 19 0 0 0 13.65 27.08Z" fill="#c6f432"/><path d="M11.49 11.49A29 29 0 0 1 24.49 3.99L27.08 13.65A19 19 0 0 0 18.56 18.56Z" fill="#1fc16b"/>
+<circle cx="32" cy="32" r="19" fill="#0b1320"/>
+<circle cx="32" cy="32" r="29" fill="none" stroke="#0b1320" stroke-width="1.6"/>
+<text x="32" y="39.5" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',Arial,sans-serif" font-weight="800" font-size="21" fill="#ffffff" letter-spacing="0.5">XI</text>
+<path d="M27 0.5h10l-5 8z" fill="#ffc53d" stroke="#0b1320" stroke-width="1.4" stroke-linejoin="round"/>
+</svg>
+    <span class="brand-word">Spin <em>XI</em></span>
     <span class="brand-season"></span>
   </div>
   <div class="comp-switch" id="comp-switch"></div>
   <nav>
-    <button class="nav-btn" id="nav-home">Home</button>
-    <button class="nav-btn" id="nav-new">Play</button>
-    <button class="nav-btn" id="nav-board">🏆 Leaderboard</button>
-    <button class="nav-btn" id="nav-howto">❓ How to Play</button>
+    <button class="nav-tab" id="nav-home" data-screen="screen-home">Home</button>
+    <button class="nav-tab" id="nav-new" data-screen="screen-setup">Play</button>
+    <button class="nav-tab" id="nav-board" data-screen="screen-board">Leaderboard</button>
+    <button class="nav-tab" id="nav-howto" data-screen="screen-howto">How to play</button>
   </nav>
 </header>
 
@@ -26,10 +39,11 @@
 
   <!-- ============ HOME ============ -->
   <section id="screen-home" class="screen">
-    <div id="live-card" class="live-card"></div>
+    <div id="live-card" class="hero"></div>
+    <div id="live-fixtures-card" class="fixtures-card hidden"></div>
     <div class="season-summary" id="season-summary"></div>
     <div class="history-wrap">
-      <h2>Your Teams</h2>
+      <div class="section-head"><h2>Your teams</h2></div>
       <div id="history-list"></div>
     </div>
   </section>
@@ -37,14 +51,15 @@
   <!-- ============ SETUP ============ -->
   <section id="screen-setup" class="screen hidden">
     <div id="name-gate" class="name-gate hidden">
-      <h2>👋 Welcome! What should we call you?</h2>
-      <p>Your display name goes on the 🏆 leaderboard with every team you enter.</p>
+      <img src="img/logo.svg" alt="">
+      <h2>Welcome to Spin XI</h2>
+      <p>What should we call you? Your name goes on the leaderboard with every team you enter.</p>
       <div class="name-gate-row">
         <input id="gate-name" maxlength="20" placeholder="Your name">
         <button class="big-btn" id="gate-continue">Continue →</button>
       </div>
     </div>
-    <div id="setup-closed-note" class="closed-note hidden">🔒 Entries for this round closed at the
+    <div id="setup-closed-note" class="closed-note hidden">Entries for this round closed at the
       first kick-off — this team will be practice only and won't appear on the leaderboard.</div>
     <h2 class="setup-step" id="setup-step-gw">1 · Choose a gameweek</h2>
     <div id="gw-grid" class="gw-grid"></div>
@@ -60,7 +75,7 @@
     <div class="game-layout">
       <div class="pitch-col">
         <div class="game-status" id="game-status"></div>
-        <div id="captain-banner" class="captain-banner hidden">👑 Pick a Captain to score DOUBLE points</div>
+        <div id="captain-banner" class="captain-banner hidden"><span class="cap-tag">C</span> Tap a player to make them captain. They score double points.</div>
         <div class="pitch" id="pitch"></div>
       </div>
       <div class="wheel-col">
@@ -79,11 +94,11 @@
   <!-- ============ LEADERBOARD ============ -->
   <section id="screen-board" class="screen hidden">
     <div class="board-head">
-      <h2>🏆 Leaderboard</h2>
+      <h2>Leaderboard</h2>
       <div class="board-name-row">
         <input id="board-name" maxlength="20" placeholder="Your name">
         <button class="nav-btn" id="board-name-save">Save name</button>
-        <button class="nav-btn" id="board-refresh">↻ Refresh</button>
+        <button class="nav-btn" id="board-refresh">Refresh</button>
       </div>
     </div>
     <div class="board-nav" id="board-nav"></div>
@@ -92,10 +107,10 @@
 
   <!-- ============ HOW TO PLAY ============ -->
   <section id="screen-howto" class="screen hidden">
-    <h2 class="howto-title">📖 How to Play</h2>
+    <h2 class="howto-title">How to play</h2>
     <div class="howto-grid">
       <div class="howto-card">
-        <h3>1 · Spin &amp; pick your XI</h3>
+        <h3><span class="n">1</span>Spin &amp; pick your XI</h3>
         <ol>
           <li>Hit <b>Play</b> on the next gameweek and choose a formation.</li>
           <li><b>SPIN</b> the reel — it lands on a random team. Teams can come up more than once.</li>
@@ -106,16 +121,16 @@
         </ol>
       </div>
       <div class="howto-card">
-        <h3>2 · Captain &amp; enter</h3>
+        <h3><span class="n">2</span>Captain &amp; enter</h3>
         <ol>
           <li>Tap a player on the pitch to make them <b>captain</b> — they score
               <b>double points</b> (negatives too!). You can change your mind until you enter the team.</li>
-          <li><b>Enter my Team</b> saves it and posts it to the 🏆 Leaderboard under your name
+          <li><b>Enter my Team</b> saves it and posts it to the Leaderboard under your name
               (set your name on the Leaderboard tab first).</li>
           <li>Enter as many teams as you like — every team goes on that gameweek's board.
               Entries close at the gameweek's first kick-off.</li>
           <li>On the <b>Season</b> board, your most recent team in each gameweek counts towards your total.</li>
-          <li>Points appear as the real matches finish — ⏳ means games are still to be played
+          <li>Points appear as the real matches finish — a <b>live</b> tag means games are still to be played
               and the score will keep updating.</li>
         </ol>
       </div>
@@ -149,7 +164,10 @@
   <!-- ============ RESULTS ============ -->
   <section id="screen-results" class="screen hidden">
     <div class="results-head" id="results-head"></div>
-    <div id="results-list"></div>
+    <div class="results-layout">
+      <div class="pitch" id="results-pitch"></div>
+      <div id="results-list"></div>
+    </div>
     <div class="results-actions">
       <button class="big-btn" id="results-again">Enter Another Team</button>
       <button class="nav-btn" id="results-home">Back to Home</button>
@@ -166,6 +184,6 @@
   </div>
 </div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
