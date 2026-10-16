@@ -1905,6 +1905,12 @@ async function finishGame() {
           ? `Re-spin used. Your new team is on the leaderboard as <b>${escapeHtml(playerName())}</b>`
           : `On the leaderboard as <b>${escapeHtml(playerName())}</b>`
             + (AUTH_ON && respinEarned(entry) ? `. You entered early, so you have one re-spin until kick-off.` : "");
+        // an early team can be re-spun straight from here
+        const base = !respin && respinnable(entry.gw);
+        if (base && base.id === entry.id) {
+          note.innerHTML += ` <button class="nav-btn sel">Use your re-spin</button>`;
+          note.querySelector("button").addEventListener("click", () => startRespin(base));
+        }
         if (!$("screen-home").classList.contains("hidden")) renderHome();
       } else {
         renderSubmitRetry(note, entry);
