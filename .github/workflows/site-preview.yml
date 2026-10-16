@@ -1,0 +1,22 @@
+name: Site preview
+
+# Branch-only helper for the redesign: checks which Premier League image
+# URLs work from GitHub (the dev container can't reach them).
+on:
+  push:
+    branches: ["claude/site-redesign-*"]
+
+permissions:
+  contents: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe image URLs
+        run: python tools/probe_images.py probe.json
