@@ -808,6 +808,15 @@ function playsThisGw(p) {
   return !!(stats && stats[String(p.id)]);
 }
 
+// FPL availability flag for a player: null when fit, else { out, label, news }
+function availability(p) {
+  if (!p.st || p.st === "a") return null;
+  const doubt = p.st === "d" && p.chance !== 0;
+  const label = doubt ? `${p.chance ?? 50}%`
+    : { i: "Injured", s: "Suspended", u: "Unavailable", n: "Unavailable" }[p.st] || "Out";
+  return { out: !doubt, label, news: p.news || "" };
+}
+
 function openPicker(team) {
   const picked = pickedIds();
   const roster = (S.playersByTeam[team.id] || []).filter((p) => !picked.has(p.id));
@@ -815,8 +824,10 @@ function openPicker(team) {
   const pending = teamFixtures(team.id, S.game.gw).some((f) => f.hs === null || f.hs === undefined);
   // players who actually play this gameweek first, then best points-per-game
   const ppgOf = (p) => (p.gp ? p.pts / p.gp : -1);
+  const isOut = (p) => (availability(p)?.out ? 1 : 0);
+  // before kick-off, players ruled out by FPL drop to the bottom
   const byBest = (a, b) =>
-    (pending ? 0 : playsThisGw(b) - playsThisGw(a)) || ppgOf(b) - ppgOf(a);
+    (pending ? isOut(a) - isOut(b) : playsThisGw(b) - playsThisGw(a)) || ppgOf(b) - ppgOf(a);
   const pickable = roster.filter((p) => fittingVacantSlots(p).length > 0).sort(byBest);
   const rest = roster.filter((p) => fittingVacantSlots(p).length === 0).sort(byBest);
 
@@ -866,11 +877,16 @@ function playerRow(p, team, pickable, pending) {
   const chips = `<span class="chip${pickable ? " fit" : ""}">${TYPE_CAT[p.type]}</span>`;
   const ppg = p.gp ? (p.pts / p.gp).toFixed(1) : "–";
   const dnp = (pending || playsThisGw(p)) ? "" : `<span class="dnp">Does not play this GW · </span>`;
+  // FPL's injury news is current, so it's only shown for fixtures still to come
+  const av = pending ? availability(p) : null;
+  const flag = av ? `<span class="avail ${av.out ? "out" : "doubt"}" title="${escapeHtml(av.news)}">${av.label}</span>` : "";
+  const news = av && av.news ? `<div class="player-news ${av.out ? "out" : "doubt"}">${escapeHtml(av.news)}</div>` : "";
   row.innerHTML = `
     ${playerPhoto(p)}
     <div class="player-main">
-      <div class="player-name">${p.name}</div>
+      <div class="player-name">${p.name}${flag}</div>
       <div class="player-sub">${dnp}${p.full !== p.name ? p.full + " · " : ""}${p.mins} mins · ${p.g}G ${p.a}A this season</div>
+      ${news}
     </div>
     <div class="ppg">${ppg}<span>pts/gm</span></div>
     <div class="pos-chips">${chips}</div>`;

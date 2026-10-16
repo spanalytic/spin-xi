@@ -422,6 +422,17 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
 .player-name { font-weight: 700; font-size: 15px; }
 .player-sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
 .player-sub .dnp { color: var(--red); font-weight: 600; }
+.avail {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; vertical-align: 2px;
+  font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  border-radius: 999px; padding: 2px 8px;
+}
+.avail::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.avail.doubt { background: var(--amber-soft); color: var(--gold-ink); }
+.avail.out { background: var(--red-soft); color: #b4232a; }
+.player-news { font-size: 12px; margin-top: 2px; }
+.player-news.doubt { color: var(--gold-ink); }
+.player-news.out { color: #b4232a; }
 .ppg { text-align: right; min-width: 54px; font-family: var(--display); font-weight: 800; font-size: 22px; line-height: 1; }
 .ppg span { display: block; font-family: "Inter", sans-serif; font-size: 9px; font-weight: 600; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-top: 2px; }
 .pos-chips { display: flex; gap: 4px; flex-wrap: wrap; }

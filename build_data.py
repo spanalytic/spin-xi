@@ -668,6 +668,11 @@ def transform():
             "mins": tot["mp"], "g": tot["gs"], "a": tot["a"],
             "gp": tot["gp"], "pts": tot["pts"],
         })
+        # FPL availability: d doubtful, i injured, s suspended, u left/unavailable,
+        # n not eligible (e.g. on loan). Only flagged players carry these keys.
+        if el["status"] != "a":
+            players[-1].update({"st": el["status"], "news": el["news"],
+                                "chance": el["chance_of_playing_next_round"]})
 
     core = {"season": "Premier League 2025/26", "teams": teams, "players": players,
             "fixtures": fix_out, "events": events}
@@ -802,6 +807,11 @@ def transform_wc():
             "mins": tot["mp"], "g": tot["gs"], "a": tot["a"],
             "gp": tot["gp"], "pts": tot["pts"],
         })
+        # FPL availability: d doubtful, i injured, s suspended, u left/unavailable,
+        # n not eligible (e.g. on loan). Only flagged players carry these keys.
+        if el["status"] != "a":
+            players[-1].update({"st": el["status"], "news": el["news"],
+                                "chance": el["chance_of_playing_next_round"]})
 
     core = {"season": "World Cup 2026", "teams": teams, "players": players,
             "fixtures": fix_out, "events": events}
@@ -943,9 +953,9 @@ def fpl_refresh_due(raw=FPL_RAW, now=None):
                if datetime.fromtimestamp(e["deadline_time_epoch"], timezone.utc) <= now]
     if any(not e["data_checked"] for e in started) and now.minute < 15:
         return True, "waiting for FPL to confirm final points"
-    # once a day, pick up rescheduled fixtures
-    if now.hour == 5 and now.minute < 15:
-        return True, "daily fixture check"
+    # once an hour, pick up injury news and rescheduled fixtures
+    if now.minute < 10:
+        return True, "hourly injury news and fixture check"
     return False, "no match on"
 
 
@@ -1047,6 +1057,11 @@ def transform_fpl(raw=FPL_RAW, comp=FPL_COMP, season=FPL_SEASON):
             "mins": tot["mp"], "g": tot["gs"], "a": tot["a"],
             "gp": tot["gp"], "pts": tot["pts"],
         })
+        # FPL availability: d doubtful, i injured, s suspended, u left/unavailable,
+        # n not eligible (e.g. on loan). Only flagged players carry these keys.
+        if el["status"] != "a":
+            players[-1].update({"st": el["status"], "news": el["news"],
+                                "chance": el["chance_of_playing_next_round"]})
 
     core = {"season": f"Premier League {season}", "teams": teams, "players": players,
             "fixtures": fix_out, "events": events}
