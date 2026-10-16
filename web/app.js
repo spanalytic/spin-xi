@@ -498,10 +498,14 @@ function renderHome() {
         ${tag ? `<span class="bchip">${tag}</span>` : ""}
         ${teamFaces(h.picks)}</div>
       <div class="history-score">${h.score}<small>pts</small></div>
-      <button class="history-del" title="Delete">✕</button>`;
+      <button class="history-del" title="Remove from this device">✕</button>`;
     row.addEventListener("click", () => viewHistoryEntry(h));
     row.querySelector(".history-del").addEventListener("click", (e) => {
       e.stopPropagation();
+      const msg = signedIn() || playerName()
+        ? "Are you sure? This only hides the team from Your teams on this device. Teams can't be taken off the leaderboard, so it will still count."
+        : "Are you sure you want to delete this team?";
+      if (!confirm(msg)) return;
       saveHistory(getHistory().filter((x) => x.id !== h.id));
       rememberDeleted(h.id);
       renderHome();
@@ -1645,7 +1649,10 @@ async function renderBoard() {
       if (!entryInSeason(e) || !entryOnTime(e) || (view !== "season" && e.gw !== view)) continue;
       const key = lbEntryKey(e);
       const prev = byKey[key];
-      if (!prev || (pd.owner === me && prev.owner !== me) || (e.ts || 0) >= (prev.e.ts || 0)) {
+      // the same player's copy (an old-board team moved into their account)
+      // keeps the time it was first entered
+      const earlier = (e.ts || 0) < (prev?.e.ts || 0);
+      if (!prev || (pd.owner === me && prev.owner !== me) || (pd.owner === prev.owner ? earlier : !earlier)) {
         byKey[key] = { owner: pd.owner, name: pd.name || "Player", e };
       }
     }
