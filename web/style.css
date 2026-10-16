@@ -607,3 +607,43 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
   .results-head .owner { font-size: 28px; }
 }
 .results-head .submit-note { flex-basis: 100%; margin-top: 0; }
+
+/* ---------- sign-in ---------- */
+.nav-account { border: 1px solid rgba(255, 255, 255, 0.22); margin-left: 6px; }
+.nav-account.in { border-color: transparent; }
+#auth-backdrop {
+  position: fixed; inset: 0; background: rgba(11, 19, 32, 0.55);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+  backdrop-filter: blur(4px); padding: 16px;
+}
+#auth-modal {
+  background: var(--surface); border-radius: 20px;
+  width: min(440px, 100%); padding: 32px 26px; text-align: center;
+  box-shadow: 0 24px 80px rgba(11, 19, 32, 0.35);
+}
+.signin-panel img { width: 56px; height: 56px; margin-bottom: 12px; }
+.signin-panel h2 { font-size: 24px; margin-bottom: 6px; }
+.signin-panel p { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+.signin-google {
+  width: 100%; max-width: 320px; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--line-2); box-shadow: var(--shadow-sm);
+}
+.signin-google:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text); }
+.signin-google svg { width: 20px; height: 20px; }
+.signin-or {
+  display: flex; align-items: center; gap: 10px; max-width: 320px; margin: 18px auto 12px;
+  color: var(--faint); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+}
+.signin-or::before, .signin-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.signin-email { display: flex; gap: 8px; justify-content: center; max-width: 320px; margin: 0 auto; }
+.signin-email input {
+  background: var(--surface); border: 1px solid var(--line-2); color: var(--text); font-family: inherit;
+  border-radius: 10px; padding: 10px 12px; font-size: 15px; flex: 1; min-width: 0;
+}
+.signin-email input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(31, 193, 107, 0.2); }
+.signin-email .nav-btn { white-space: nowrap; }
+.signin-msg { min-height: 20px; margin-top: 12px; font-size: 14px; color: var(--muted); }
+.signin-msg.ok { color: var(--brand-ink); }
+.signin-msg.err { color: var(--red); }
+.signin-skip:hover { color: var(--text); }
+.signin-account { font-size: 14px; color: var(--muted); margin-bottom: 18px; }

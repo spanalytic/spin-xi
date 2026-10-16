@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 
@@ -32,6 +32,7 @@
     <button class="nav-tab" id="nav-new" data-screen="screen-setup">Play</button>
     <button class="nav-tab" id="nav-board" data-screen="screen-board">Leaderboard</button>
     <button class="nav-tab" id="nav-howto" data-screen="screen-howto">How to play</button>
+    <button class="nav-tab nav-account hidden" id="nav-account">Sign in</button>
   </nav>
 </header>
 
@@ -50,6 +51,7 @@
 
   <!-- ============ SETUP ============ -->
   <section id="screen-setup" class="screen hidden">
+    <div id="signin-gate" class="name-gate signin-panel hidden"></div>
     <div id="name-gate" class="name-gate hidden">
       <img src="img/logo.svg" alt="">
       <h2>Welcome to Spin XI</h2>
@@ -98,6 +100,7 @@
       <div class="board-name-row">
         <input id="board-name" maxlength="20" placeholder="Your name">
         <button class="nav-btn" id="board-name-save">Save name</button>
+        <button class="nav-btn sel hidden" id="board-signin">Sign in to join</button>
         <button class="nav-btn" id="board-refresh">Refresh</button>
       </div>
     </div>
@@ -184,6 +187,12 @@
   </div>
 </div>
 
-<script src="app.js?v=14"></script>
+<!-- ============ SIGN-IN MODAL ============ -->
+<div id="auth-backdrop" class="hidden">
+  <div id="auth-modal" class="signin-panel"></div>
+</div>
+
+<script src="firebase-config.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
