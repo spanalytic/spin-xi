@@ -497,15 +497,8 @@ function renderHome() {
       <div class="history-meta">${COMP_LABELS[entryComp(h)]} &middot; ${h.formation} &middot; picked ${date}
         ${tag ? `<span class="bchip">${tag}</span>` : ""}
         ${teamFaces(h.picks)}</div>
-      <div class="history-score">${h.score}<small>pts</small></div>
-      <button class="history-del" title="Delete">✕</button>`;
+      <div class="history-score">${h.score}<small>pts</small></div>`;
     row.addEventListener("click", () => viewHistoryEntry(h));
-    row.querySelector(".history-del").addEventListener("click", (e) => {
-      e.stopPropagation();
-      saveHistory(getHistory().filter((x) => x.id !== h.id));
-      rememberDeleted(h.id);
-      renderHome();
-    });
     list.appendChild(row);
   }
 }
@@ -1182,7 +1175,6 @@ const PENDING_SUBMITS_KEY = "spinxi_pending_submits_v1";
    signing in on the browser that entered them links them to the account.
    Without a config the site keeps the name-only textdb board. */
 const AUTH_ON = !!window.SPINXI_FIREBASE;
-const DELETED_KEY = "spinxi_deleted_ids_v1";
 const A = { mod: null, user: null, profile: null, failed: false, ready: Promise.resolve() };
 
 function startAuth() {
@@ -1242,24 +1234,16 @@ function adoptLocalTeams() {
 
 // teams entered on another device show up in Your Teams
 function mergeRemoteHistory() {
-  let deleted = [];
-  try { deleted = JSON.parse(localStorage.getItem(DELETED_KEY)) || []; } catch {}
   const hist = getHistory();
   const have = new Set(hist.map((h) => h.id));
   let changed = false;
   for (const e of A.profile.entries) {
-    if (have.has(e.id) || deleted.includes(e.id)) continue;
+    if (have.has(e.id)) continue;
     hist.push({ ...e, score: 0 });
     changed = true;
   }
   if (changed) saveHistory(hist);
   return changed;
-}
-function rememberDeleted(id) {
-  let deleted = [];
-  try { deleted = JSON.parse(localStorage.getItem(DELETED_KEY)) || []; } catch {}
-  if (!deleted.includes(id)) deleted.push(id);
-  localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
 }
 
 function renderAccount() {
@@ -1645,7 +1629,10 @@ async function renderBoard() {
       if (!entryInSeason(e) || !entryOnTime(e) || (view !== "season" && e.gw !== view)) continue;
       const key = lbEntryKey(e);
       const prev = byKey[key];
-      if (!prev || (pd.owner === me && prev.owner !== me) || (e.ts || 0) >= (prev.e.ts || 0)) {
+      // the same player's copy (an old-board team moved into their account)
+      // keeps the time it was first entered
+      const earlier = (e.ts || 0) < (prev?.e.ts || 0);
+      if (!prev || (pd.owner === me && prev.owner !== me) || (pd.owner === prev.owner ? earlier : !earlier)) {
         byKey[key] = { owner: pd.owner, name: pd.name || "Player", e };
       }
     }
