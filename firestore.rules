@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// Spin XI leaderboard. Paste into Firebase console → Firestore → Rules.
+// Anyone can read the board; a signed-in player can only write their own
+// document, can add teams but never edit or delete them, and every team is
+// stamped with the server's time (so entries after the deadline show as late).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validName(n) {
+      return n is string && n.size() > 0 && n.size() <= 20;
+    }
+
+    function validEntry(e) {
+      return e.keys().hasOnly(['comp', 'label', 'gw', 'formation', 'picks', 'captain', 'at'])
+        && e.keys().hasAll(['comp', 'gw', 'formation', 'picks', 'at'])
+        && e.comp is string && e.comp.size() <= 12
+        && (!('label' in e) || (e.label is string && e.label.size() <= 40))
+        && e.gw is int && e.gw >= 1 && e.gw <= 50
+        && e.formation is string && e.formation.size() <= 10
+        && e.picks is list && e.picks.size() == 11
+        && (!('captain' in e) || e.captain == null || e.captain is int)
+        && e.at == request.time;
+    }
+
+    function validEntryId(id) {
+      return id.size() <= 40 && id.matches('[A-Za-z0-9_-]+');
+    }
+
+    // only new teams may be added, one per write, named by `last`;
+    // existing ones stay exactly as they were
+    function entriesOk(before, after, last) {
+      let d = after.diff(before);
+      return d.removedKeys().size() == 0
+        && d.changedKeys().size() == 0
+        && (d.addedKeys().size() == 0
+            || (d.addedKeys() == [last].toSet()
+                && validEntryId(last)
+                && validEntry(after[last])));
+    }
+
+    match /players/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'updated', 'entries', 'last'])
+        && validName(request.resource.data.name)
+        && request.resource.data.updated == request.time
+        && entriesOk({}, request.resource.data.get('entries', {}), request.resource.data.get('last', ''));
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'updated', 'entries', 'last'])
+        && validName(request.resource.data.name)
+        && request.resource.data.updated == request.time
+        && entriesOk(resource.data.get('entries', {}), request.resource.data.get('entries', {}),
+          request.resource.data.get('last', ''));
+      allow delete: if false;
+    }
+
+    // old (pre-sign-in) leaderboard names, claimed once by one account
+    match /legacy/{slug} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}

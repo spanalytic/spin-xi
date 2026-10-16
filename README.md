@@ -22,7 +22,8 @@ The home page shows the next gameweek with a kick-off deadline and a Play
 button. Entries for a gameweek close at its first kick-off, then Play moves on
 to the following gameweek automatically (no code change needed each week).
 
-**Shared leaderboard** (🏆 tab): set a name once, and every finished team is
+**Shared leaderboard** (🏆 tab): sign in once (see *Player sign-in* below;
+without Firebase set up, players just type a name) and every finished team is
 submitted automatically. The board has a page per gameweek (‹ › to browse)
 and a **Season** table where each player's most recent on-time team in every
 gameweek counts. Submissions store the *picks*, not the score — every
@@ -32,6 +33,42 @@ anonymous key/value service (textdb.online, board id in `app.js`); it's
 trust-based and fine for a friends game, but if the game grows it should move
 to a real backend (e.g. Supabase/Firebase). "Save name" also re-submits all
 locally saved teams under the new name.
+
+## Player sign-in
+
+Players can sign in with **Google** or an **emailed sign-in link** (no
+passwords). Signed-in players' teams go into Firebase (Firestore) instead of
+textdb, follow them to any device, and are stamped with the server's clock so
+a team can't be backdated past the deadline. Nobody can edit or delete a team
+once it's entered, or write to anyone else's. Playing without signing in still
+works as practice. Teams entered before sign-in existed stay on the board, and
+signing in on the browser that entered them links them to the account.
+
+It switches on when `web/firebase-config.js` holds a Firebase project;
+until then the site keeps the name-only textdb board. One-off setup:
+
+1. https://console.firebase.google.com → **Create a project** (e.g. `spin-xi`,
+   Google Analytics off).
+2. **Build → Authentication → Get started → Sign-in method**:
+   - enable **Google** (pick your support email, Save);
+   - enable **Email/Password**, then switch on **Email link (passwordless
+     sign-in)**, Save.
+3. **Authentication → Settings → Authorized domains → Add domain**:
+   `spanalytic.github.io`.
+4. **Build → Firestore Database → Create database** → Standard edition,
+   location `europe-west2 (London)`, **production mode**.
+5. **Firestore → Rules**: replace everything with the contents of
+   `firestore.rules` from this repo → **Publish**.
+6. **Project settings (gear) → General → Your apps → Web (`</>`)** → register
+   the app as `Spin XI` (no Hosting) and copy the `firebaseConfig` values into
+   `web/firebase-config.js`.
+
+The free Spark plan is plenty: the board reads one document per player.
+
+To test locally against the Firebase emulators, run
+`firebase emulators:start --only auth,firestore --project demo-spinxi` and set
+`emulator: { auth: "http://127.0.0.1:9099", firestore: "127.0.0.1:8080" }` in
+the config.
 
 Locally: double-click `start.bat`, or run
 `python -m http.server 8317 --directory web` and open http://localhost:8317

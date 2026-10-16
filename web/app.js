@@ -420,6 +420,7 @@ function renderHome() {
     row.querySelector(".history-del").addEventListener("click", (e) => {
       e.stopPropagation();
       saveHistory(getHistory().filter((x) => x.id !== h.id));
+      rememberDeleted(h.id);
       renderHome();
     });
     list.appendChild(row);
@@ -473,16 +474,27 @@ function renderSetup(opts = {}) {
   const locked = !!opts.lockedGw;
   S.setup = { gw: opts.lockedGw || null, formation: null };
 
-  // first visit: ask for a display name before anything else
-  const needName = !playerName();
-  $("name-gate").classList.toggle("hidden", !needName);
+  // first visit: sign in (or, without sign-in, ask for a display name)
+  const needSignIn = AUTH_ON && !!A.mod && !signedIn() && !S.practising;
+  $("signin-gate").classList.toggle("hidden", !needSignIn);
+  if (needSignIn) {
+    $("signin-gate").innerHTML = signInPanelHtml({
+      title: "Sign in to play for the leaderboard",
+      practice: true,
+    });
+    wireSignInPanel($("signin-gate"), {
+      onPractice: () => { S.practising = true; renderSetup(S.setupOpts || {}); },
+    });
+  }
+  const needName = needSignIn || (!AUTH_ON && !playerName());
+  $("name-gate").classList.toggle("hidden", !needName || AUTH_ON);
   $("setup-step-formation").classList.toggle("hidden", needName);
   $("formation-grid").classList.toggle("hidden", needName);
   document.querySelector(".setup-actions").classList.toggle("hidden", needName);
   if (needName) {
     $("setup-step-gw").classList.add("hidden");
     $("gw-grid").classList.add("hidden");
-    setTimeout(() => $("gate-name").focus(), 100);
+    if (!AUTH_ON) setTimeout(() => $("gate-name").focus(), 100);
     return;
   }
 
@@ -938,7 +950,164 @@ const NAME_KEY = "spinxi_player_name";
 const NAME_SLUG_KEY = "spinxi_player_slug";
 const PENDING_SUBMITS_KEY = "spinxi_pending_submits_v1";
 
-function playerName() { return localStorage.getItem(NAME_KEY) || ""; }
+/* ---------------- player sign-in ----------------
+   When web/firebase-config.js holds a Firebase project, players sign in with
+   Google or an emailed link and the board lives in Firestore (login.js).
+   Teams entered before sign-in existed stay on textdb and are still shown;
+   signing in on the browser that entered them links them to the account.
+   Without a config the site keeps the name-only textdb board. */
+const AUTH_ON = !!window.SPINXI_FIREBASE;
+const DELETED_KEY = "spinxi_deleted_ids_v1";
+const A = { mod: null, user: null, profile: null, failed: false, ready: Promise.resolve() };
+
+function startAuth() {
+  if (!AUTH_ON) return;
+  A.ready = import("./login.js?v=15")
+    .then((mod) => { A.mod = mod; return mod.start(window.SPINXI_FIREBASE, onAuthChange); })
+    .catch((e) => { console.warn("sign-in unavailable", e); A.failed = true; renderAccount(); });
+}
+function signedIn() { return !!(A.user && A.profile); }
+
+async function onAuthChange(user) {
+  A.user = user;
+  A.profile = null;
+  if (user) {
+    try { A.profile = await setUpProfile(user); }
+    catch (e) { console.warn("profile load failed", e); }
+  }
+  renderAccount();
+  closeSignIn();
+  if (signedIn()) {
+    if (mergeRemoteHistory() && !$("screen-home").classList.contains("hidden")) renderHome();
+    await retryPendingSubmits();
+  }
+  if (!$("screen-board").classList.contains("hidden")) renderBoard();
+  if (!$("screen-setup").classList.contains("hidden")) renderSetup(S.setupOpts || {});
+}
+
+// first sign-in: keep the name this browser already used on the board and
+// link its old textdb teams to the account
+async function setUpProfile(user) {
+  let profile = await A.mod.getProfile(user.uid);
+  const localName = localStorage.getItem(NAME_KEY) || "";
+  const localSlug = localStorage.getItem(NAME_SLUG_KEY) || playerSlug(localName);
+  if (localSlug) await A.mod.claimLegacy(localSlug);
+  if (!profile) {
+    const name = (localName || user.displayName.split(" ")[0] || user.email.split("@")[0] || "Player").slice(0, 20);
+    await A.mod.saveName(name);
+    profile = { uid: user.uid, name, entries: [] };
+  }
+  return profile;
+}
+
+// teams entered on another device show up in Your Teams
+function mergeRemoteHistory() {
+  let deleted = [];
+  try { deleted = JSON.parse(localStorage.getItem(DELETED_KEY)) || []; } catch {}
+  const hist = getHistory();
+  const have = new Set(hist.map((h) => h.id));
+  let changed = false;
+  for (const e of A.profile.entries) {
+    if (have.has(e.id) || deleted.includes(e.id)) continue;
+    hist.push({ ...e, score: 0 });
+    changed = true;
+  }
+  if (changed) saveHistory(hist);
+  return changed;
+}
+function rememberDeleted(id) {
+  let deleted = [];
+  try { deleted = JSON.parse(localStorage.getItem(DELETED_KEY)) || []; } catch {}
+  if (!deleted.includes(id)) deleted.push(id);
+  localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
+}
+
+function renderAccount() {
+  const btn = $("nav-account");
+  if (!AUTH_ON) { btn.classList.add("hidden"); return; }
+  btn.classList.remove("hidden");
+  btn.textContent = signedIn() ? A.profile.name : "Sign in";
+  btn.classList.toggle("in", signedIn());
+}
+
+const GOOGLE_G = `<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`;
+
+function signInPanelHtml(opts = {}) {
+  return `
+    <img src="img/logo.svg" alt="">
+    <h2>${opts.title || "Sign in to join the leaderboard"}</h2>
+    <p>${opts.sub || "Your teams go on the leaderboard under your name, on any device you sign in on."}</p>
+    <button class="big-btn signin-google" data-act="google">${GOOGLE_G}Continue with Google</button>
+    <div class="signin-or">or email me a sign-in link</div>
+    <form class="signin-email" data-act="email">
+      <input type="email" required placeholder="you@example.com" autocomplete="email">
+      <button class="nav-btn sel" type="submit">Send link</button>
+    </form>
+    <div class="signin-msg"></div>
+    ${opts.practice ? `<button class="text-btn signin-skip" data-act="practice">Just practise for now</button>` : ""}`;
+}
+
+function wireSignInPanel(el, opts = {}) {
+  const msg = el.querySelector(".signin-msg");
+  el.querySelector('[data-act="google"]').addEventListener("click", async () => {
+    msg.textContent = "";
+    msg.className = "signin-msg";
+    try { await A.mod.signInGoogle(); }
+    catch (e) {
+      if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") {
+        msg.className = "signin-msg err";
+        msg.textContent = "Google sign-in didn't work. Try the email link instead.";
+        console.warn("google sign-in failed", e);
+      }
+    }
+  });
+  el.querySelector('[data-act="email"]').addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const email = el.querySelector('input[type="email"]').value.trim();
+    if (!email) return;
+    msg.className = "signin-msg";
+    msg.textContent = "Sending…";
+    try {
+      await A.mod.sendEmailLink(email);
+      msg.className = "signin-msg ok";
+      msg.innerHTML = `Check <b>${escapeHtml(email)}</b> and open the link on this device to sign in.`;
+    } catch (e) {
+      console.warn("email link failed", e);
+      msg.className = "signin-msg err";
+      msg.textContent = "Couldn't send the email. Check the address and try again.";
+    }
+  });
+  el.querySelector('[data-act="practice"]')?.addEventListener("click", opts.onPractice);
+}
+
+async function openSignIn() {
+  await A.ready;
+  const box = $("auth-modal");
+  if (A.failed || !A.mod) {
+    box.innerHTML = `<h2>Sign-in is unavailable</h2><p>Couldn't reach the sign-in service. Check your connection and reload the page.</p>`;
+  } else if (signedIn()) {
+    box.innerHTML = `
+      <img src="img/logo.svg" alt="">
+      <h2>${escapeHtml(A.profile.name)}</h2>
+      <p>Signed in as ${escapeHtml(A.user.email || "your Google account")}.
+        You can change your leaderboard name on the Leaderboard tab.</p>
+      <button class="nav-btn" id="auth-signout">Sign out</button>`;
+    $("auth-signout").addEventListener("click", async () => {
+      await A.mod.signOut();
+      closeSignIn();
+    });
+  } else {
+    box.innerHTML = signInPanelHtml();
+    wireSignInPanel(box);
+  }
+  $("auth-backdrop").classList.remove("hidden");
+}
+function closeSignIn() { $("auth-backdrop").classList.add("hidden"); }
+
+function playerName() {
+  if (AUTH_ON) return A.profile?.name || "";
+  return localStorage.getItem(NAME_KEY) || "";
+}
 function playerSlug(name) {
   return (name || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20);
 }
@@ -1037,6 +1206,18 @@ async function lbWrite(key, obj) {
 
 // submit this team entry; repeat entries are allowed, exact resubmits are replaced
 async function lbSubmit(entry) {
+  if (AUTH_ON) {
+    if (!signedIn()) return false;
+    try {
+      await A.mod.submitEntry(normaliseEntry(entry));
+      if (!A.profile.entries.some((e) => e.id === entry.id)) A.profile.entries.push(normaliseEntry(entry));
+      removePendingSubmit(entry);
+      return true;
+    } catch (e) {
+      console.warn("leaderboard submit failed", e);
+      return false;
+    }
+  }
   const name = playerName();
   if (!name) return false;
   const slug = ensurePlayerSlug(name);
@@ -1065,6 +1246,13 @@ async function lbUpdateMembers({ add, remove } = {}) {
 }
 
 async function lbSavePlayerName(name) {
+  if (AUTH_ON) {
+    if (!signedIn()) return false;
+    await A.mod.saveName(name);
+    A.profile.name = name;
+    renderAccount();
+    return true;
+  }
   const previousName = playerName();
   const previousSlug = storedPlayerSlug();
   const nextSlug = ensurePlayerSlug(name);
@@ -1104,6 +1292,14 @@ async function lbMigrateLocalEntries(previousSlug, nextSlug, nextName, previousN
 }
 
 async function retryPendingSubmits() {
+  if (AUTH_ON) {
+    // the server stamps each team with its own clock, so a team that missed
+    // its deadline while waiting would only count as late: drop it
+    for (const entry of getPendingSubmits()) {
+      if (entryInSeason(entry) && !entriesOpen(entry.gw)) removePendingSubmit(entry);
+    }
+    if (!signedIn()) return true;
+  }
   if (!playerName()) return true;
   let allOk = true;
   for (const entry of getPendingSubmits()) {
@@ -1155,36 +1351,65 @@ function renderBoardNav() {
   $("board-season").addEventListener("click", () => go("season"));
 }
 
+// everyone on the board: [{ owner, name, entries }]. `owner` identifies the
+// player (account uid, or "L:<slug>" for a name-only textdb player)
+async function lbLoadPlayers() {
+  const members = (await lbRead("members")) || [];
+  const legacy = await Promise.all(members.map(async (slug) => ({ slug, rec: await lbRead(`p_${slug}`) })));
+  const players = legacy.filter((l) => l.rec).map(({ slug, rec }) => ({
+    owner: "L:" + slug, name: rec.name || "Player", entries: rec.entries || [],
+  }));
+  if (!AUTH_ON) return players;
+  if (!A.mod) throw new Error("sign-in unavailable");
+  const { players: accounts, claims } = await A.mod.loadBoard();
+  const names = Object.fromEntries(accounts.map((p) => [p.uid, p.name]));
+  for (const p of players) {
+    const uid = claims[p.owner.slice(2)];
+    if (uid) { p.owner = uid; p.name = names[uid] || p.name; }
+  }
+  return players.concat(accounts.map((p) => ({ owner: p.uid, name: p.name, entries: p.entries })));
+}
+function myOwner() {
+  if (AUTH_ON) return A.user?.uid || "";
+  return playerName() ? "L:" + storedPlayerSlug() : "";
+}
+
 async function renderBoard() {
+  await A.ready;
   await retryPendingSubmits();
-  $("board-name").value = playerName();
+  renderBoardName();
   renderBoardNav();
   const view = boardView();
   const body = $("board-body");
   body.innerHTML = `<div class="history-empty">Loading leaderboard…</div>`;
-  const members = (await lbRead("members")) || [];
-  if (members.length === 0) {
+  let playersData;
+  try { playersData = await lbLoadPlayers(); }
+  catch (e) {
+    console.warn("leaderboard load failed", e);
+    body.innerHTML = `<div class="history-empty">Couldn't load the leaderboard. Check your connection and hit Refresh.</div>`;
+    return;
+  }
+  if (S.boardView !== view) return;    // user switched view while loading
+  if (playersData.length === 0) {
     body.innerHTML = `<div class="history-empty">Nobody on the board yet. Enter a team to join, even while scores are still 0.</div>`;
     return;
   }
-  const playersData = (await Promise.all(members.map((m) => lbRead(`p_${m}`)))).filter(Boolean);
-  if (S.boardView !== view) return;    // user switched view while loading
 
   // one row per distinct entry (the same entry can sit under an old name too)
   const rowsByKey = {};
-  const me = playerName();
+  const me = myOwner();
   for (const pd of playersData) {
     const entries = (pd.entries || []).filter((e) => entryInSeason(e) && entryOnTime(e)
       && (view === "season" || e.gw === view));
     for (const e of entries) {
       const stats = await loadGwStats(e.gw);
       const sc = computeEntryScore(e, stats);
-      const row = { name: pd.name || "Player", entry: e, total: sc.total, pending: sc.pending };
+      const row = { owner: pd.owner, name: pd.name || "Player", entry: e, total: sc.total, pending: sc.pending };
       const key = lbEntryKey(e);
       const prev = rowsByKey[key];
       const entryTs = e.ts || 0;
       const prevTs = prev?.entry?.ts || 0;
-      if (!prev || (row.name === me && prev.name !== me) || entryTs >= prevTs) {
+      if (!prev || (row.owner === me && prev.owner !== me) || entryTs >= prevTs) {
         rowsByKey[key] = row;
       }
     }
@@ -1199,6 +1424,14 @@ async function renderBoard() {
   }
   if (view === "season") renderSeasonBoard(body, rows, me);
   else renderGwBoard(body, rows, me);
+}
+
+function renderBoardName() {
+  const out = AUTH_ON && !signedIn();
+  $("board-name").classList.toggle("hidden", out);
+  $("board-name-save").classList.toggle("hidden", out);
+  $("board-signin").classList.toggle("hidden", !out);
+  $("board-name").value = playerName();
 }
 
 function rankCell(i) {
@@ -1216,12 +1449,12 @@ function renderGwBoard(body, rows, me) {
   list.className = "board-list";
   body.appendChild(list);
   rows.forEach((r, i) => {
-    const count = (seen[r.name] = (seen[r.name] || 0) + 1);
+    const count = (seen[r.owner] = (seen[r.owner] || 0) + 1);
     const name = count > 1 ? `${r.name} #${count}` : r.name;
     const label = r.entry.label || "GW " + r.entry.gw;
     const time = entryTimeLabel(r.entry.ts);
     const row = document.createElement("div");
-    row.className = "board-row" + (r.name === me ? " me" : "");
+    row.className = "board-row" + (r.owner === me ? " me" : "");
     row.title = "View team";
     row.innerHTML = `
       ${rankCell(i)}
@@ -1244,13 +1477,14 @@ function renderGwBoard(body, rows, me) {
 function renderSeasonBoard(body, rows, me) {
   const byPlayer = {};
   for (const r of rows) {
-    const p = (byPlayer[r.name] ||= { name: r.name, byGw: {} });
+    const p = (byPlayer[r.owner] ||= { owner: r.owner, name: r.name, byGw: {} });
     const prev = p.byGw[r.entry.gw];
     if (!prev || (r.entry.ts || 0) > (prev.entry.ts || 0)) p.byGw[r.entry.gw] = r;
   }
   const table = Object.values(byPlayer).map((p) => {
     const gwRows = Object.values(p.byGw).sort((a, b) => a.entry.gw - b.entry.gw);
     return {
+      owner: p.owner,
       name: p.name,
       gwRows,
       total: gwRows.reduce((t, r) => t + r.total, 0),
@@ -1264,7 +1498,7 @@ function renderSeasonBoard(body, rows, me) {
   body.appendChild(list);
   table.forEach((p, i) => {
     const row = document.createElement("div");
-    row.className = "board-row static" + (p.name === me ? " me" : "");
+    row.className = "board-row static" + (p.owner === me ? " me" : "");
     const chips = p.gwRows.map((r) =>
       `<span class="bchip${r.pending ? " pend" : ""}">${escapeHtml(r.entry.label || "GW " + r.entry.gw)}: ${r.total}${r.pending ? " live" : ""}</span>`).join("");
     row.innerHTML = `
@@ -1399,6 +1633,7 @@ async function finishGame() {
   show("screen-results");
 
   // share this team to the leaderboard
+  await A.ready;
   const note = document.createElement("div");
   note.className = "submit-note";
   $("results-head").appendChild(note);
@@ -1414,6 +1649,10 @@ async function finishGame() {
         renderSubmitRetry(note, entry);
       }
     });
+  } else if (AUTH_ON) {
+    queuePendingSubmit(entry);
+    note.innerHTML = `<button class="nav-btn sel" id="join-board">Sign in to put this team on the leaderboard</button>`;
+    $("join-board").addEventListener("click", openSignIn);
   } else {
     note.innerHTML = `<button class="nav-btn" id="join-board">Join the leaderboard</button>`;
     $("join-board").addEventListener("click", () => {
@@ -1451,13 +1690,21 @@ function goHome() {
     if (changed && !$("screen-home").classList.contains("hidden")) renderHome();
   }).catch((e) => console.warn("score refresh failed", e));
 }
-function goSetup(opts = {}) {
+async function goSetup(opts = {}) {
+  await A.ready;
   renderSetup({ ...opts, lockedGw: opts.lockedGw || liveRound()?.gw });
   show("screen-setup");
 }
 
 async function init() {
+  startAuth();
   await loadComp(S.comp);
+  renderAccount();
+  $("nav-account").addEventListener("click", openSignIn);
+  $("board-signin").addEventListener("click", openSignIn);
+  $("auth-backdrop").addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeSignIn();
+  });
   $("brand-home").addEventListener("click", goHome);
   $("nav-home").addEventListener("click", goHome);
   $("nav-new").addEventListener("click", () => goSetup());
@@ -1470,6 +1717,12 @@ async function init() {
   $("board-name-save").addEventListener("click", async () => {
     const name = $("board-name").value.trim();
     if (!name) return;
+    if (AUTH_ON) {
+      try { await lbSavePlayerName(name.slice(0, 20)); }
+      catch (e) { console.warn("name save failed", e); }
+      renderBoard();
+      return;
+    }
     await lbSavePlayerName(name);
     if (S.pendingSubmit) {
       queuePendingSubmit(S.pendingSubmit);
