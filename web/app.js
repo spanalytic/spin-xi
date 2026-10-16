@@ -1173,6 +1173,7 @@ async function onAuthChange(user) {
   closeSignIn();
   if (signedIn()) {
     mergeRemoteHistory();
+    adoptLocalTeams();
     await retryPendingSubmits();
   }
   // the live card shows this player's team and re-spin
@@ -1194,6 +1195,18 @@ async function setUpProfile(user) {
     profile = { uid: user.uid, name, entries: [] };
   }
   return profile;
+}
+
+// a gameweek still open that this device entered before signing in (e.g. on
+// the old name-only board): its first team joins the account, so it counts
+// there and, entered early enough, earns the re-spin
+function adoptLocalTeams() {
+  const hist = getHistory().filter((h) => entryInSeason(h) && h.picks && !h.respinOf && entriesOpen(h.gw));
+  for (const gw of new Set(hist.map((h) => h.gw))) {
+    if (countedEntry(myEntries(), gw)) continue;
+    const c = countedEntry(hist, gw);
+    if (c) queuePendingSubmit(c.base);
+  }
 }
 
 // teams entered on another device show up in Your Teams
