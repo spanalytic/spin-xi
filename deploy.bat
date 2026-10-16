@@ -1,18 +1,17 @@
 @echo off
-rem Refresh World Cup data and redeploy the site.
-rem   deploy.bat        - rebuild from existing match files + publish
-rem   deploy.bat fetch  - fetch latest results first (runs master_update), then publish
+rem Refresh Premier League data from the FPL API and redeploy the site.
+rem   deploy.bat          - fetch the latest FPL stats, rebuild + publish
+rem   deploy.bat offline  - rebuild from the FPL snapshots already in data\raw\2627 + publish
 cd /d "%~dp0"
 
-if "%1"=="fetch" (
-  pushd C:\Users\thoma\PyCharmMiscProject
-  .venv\Scripts\python.exe -m orchestrator.master_update --league "World Cup" --skip-odds
-  popd
+if "%1"=="offline" (
+  C:\Users\thoma\PyCharmMiscProject\.venv\Scripts\python.exe build_data.py fpl-transform
+) else (
+  C:\Users\thoma\PyCharmMiscProject\.venv\Scripts\python.exe build_data.py fpl
 )
-
-C:\Users\thoma\PyCharmMiscProject\.venv\Scripts\python.exe build_data.py wc
+if errorlevel 1 exit /b 1
 git add -A
-git commit -m "World Cup data refresh"
+git commit -m "Premier League data refresh"
 git push origin main
 for /f %%i in ('git subtree split --prefix web HEAD') do set SPLIT=%%i
 git push -f origin %SPLIT%:gh-pages

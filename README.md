@@ -4,15 +4,13 @@ Pick a formation, spin a wheel to land on a team, choose a player from that
 team for a vacant position, and repeat until you have a full XI. Then see how
 your team scored in that round using real match stats.
 
-Two competitions (switch with the pills in the top bar):
+The live game is the **Premier League 2026/27**, one round per FPL gameweek,
+scored with the official **Fantasy Premier League** points system. The wheel
+only offers clubs with a fixture in the gameweek (blank gameweeks shrink it,
+double gameweeks score both matches).
 
-- **Premier League 2025/26** — all 38 gameweeks
-- **World Cup 2026** — group matchdays, R32, R16, QF, SF, bronze final, final.
-  The wheel only offers teams that have a fixture in the selected round. For
-  rounds that haven't been played yet you can pick a team now and re-open it
-  from history later — the score refreshes automatically once the data has
-  been rebuilt. Knockout scoring is extra-time aware (120-minute windows) and
-  shootout kicks are excluded.
+Saved teams from the archived **Premier League 2025/26** and **World Cup 2026**
+games still open from history.
 
 ## Play it
 
@@ -20,11 +18,14 @@ Two competitions (switch with the pills in the top bar):
 `spanalytic/spin-xi`). Each player's teams/history live in their own browser
 (localStorage) — share the link and everyone plays independently.
 
-The home page shows the current live round with a kick-off deadline and a
-Play button; completed rounds are under the **Practice** tab.
+The home page shows the next gameweek with a kick-off deadline and a Play
+button. Entries for a gameweek close at its first kick-off, then Play moves on
+to the following gameweek automatically (no code change needed each week).
 
 **Shared leaderboard** (🏆 tab): set a name once, and every finished team is
-submitted automatically. Submissions store the *picks*, not the score — every
+submitted automatically. The board has a page per gameweek (‹ › to browse)
+and a **Season** table where each player's most recent on-time team in every
+gameweek counts. Submissions store the *picks*, not the score — every
 viewer's browser recomputes points from the match data, so the board updates
 live as games finish (⏳ marks rounds still in play). Storage is a free
 anonymous key/value service (textdb.online, board id in `app.js`); it's
@@ -35,15 +36,16 @@ locally saved teams under the new name.
 Locally: double-click `start.bat`, or run
 `python -m http.server 8317 --directory web` and open http://localhost:8317
 
-## Updating during the tournament
+## Updating during the season
 
 ```
-deploy.bat        rebuild from already-fetched match files + publish
-deploy.bat fetch  fetch the latest results first, then publish
+deploy.bat          fetch the latest FPL stats, rebuild + publish
+deploy.bat offline  rebuild from the FPL snapshots already fetched + publish
 ```
 
-Run `deploy.bat fetch` after each matchday; players then reopen their saved
-teams to see updated scores. Pages' CDN can lag a few minutes after a push.
+Run `deploy.bat` after each matchday (or whenever you want live scores
+refreshed); players' scores and the leaderboard recompute from the new data.
+Pages' CDN can lag a few minutes after a push.
 
 ## How it works
 
@@ -51,9 +53,9 @@ teams to see updated scores. Pages' CDN can lag a few minutes after a push.
 - **Positions**: players are eligible by their official FPL position
   (Goalkeeper / Defender / Midfielder / Forward). Any defender can fill any
   back-line slot (LB/CB/RB/wing-back), any midfielder any midfield slot, etc.
-  The picker also shows each player's average points per game for the season
-  under this scoring system.
-- **Scoring** is by position category:
+  The picker also shows each player's average FPL points per game this season.
+- **Scoring** is the official FPL 2026/27 points system (unchanged from
+  2025/26; FPL only retuned how bonus points are decided):
 
   | Event | Points |
   |---|---|
@@ -61,26 +63,21 @@ teams to see updated scores. Pages' CDN can lag a few minutes after a push.
   | Played 60+ min | 2 |
   | Goal (GK / DEF / MID / FWD) | 10 / 6 / 5 / 4 |
   | Assist | 3 |
-  | Clean sheet (GK, DEF / MID) | 4 / 1 |
+  | Clean sheet, 60+ min (GK, DEF / MID) | 4 / 1 |
   | Every 3 saves (GK) | 1 |
   | Penalty save | 5 |
   | Penalty miss | -2 |
   | Every 2 goals conceded (GK, DEF) | -1 |
   | Yellow / red card | -1 / -3 |
   | Own goal | -2 |
-  | Defensive contribution: 10+ clearances/interceptions/tackles (DEF) or 12+ incl. recoveries (MID/FWD), per match | 2 |
-  | Bonus points: top 3 match ratings per game | 1-3 |
+  | Defensive contribution: 10+ clearances, blocks, interceptions & tackles (DEF) or 12+ incl. recoveries (MID/FWD) | 2 |
+  | Bonus points (top 3 on FPL's BPS per match) | 1-3 |
 
-  Penalties come from the shot map (`situation: "penalty"`): any failed
-  penalty is a miss (-2) for the taker, and a saved one credits the on-pitch
-  keeper (+5) — both reconcile exactly with FPL's official 25/26 totals
-  (11 saved, 15 missed).
-
-  Differences from official FPL scoring (limits of our own data): bonus uses
-  the top-3 player match ratings per game (FPL tie rules applied) instead of
-  FPL's proprietary BPS; defensive contribution can't count blocked shots;
-  assists follow the data provider's stricter definition; clean sheets and
-  goals conceded use the player's estimated on-pitch window.
+  Every stat comes from FPL itself (the `event/{gw}/live` endpoint), so there
+  are no approximations: bonus is FPL's own BPS result, assists use FPL's
+  definition, and so on. The build re-scores every player-fixture row and
+  checks it against FPL's own points (on the 25/26 snapshot: 11,493/11,493
+  rows and all 841 season totals match).
 
   Double gameweeks are scored per fixture (minutes, saves and conceded
   thresholds apply per match, as in FPL).
@@ -94,46 +91,35 @@ teams to see updated scores. Pages' CDN can lag a few minutes after a push.
 
 ## Data
 
-Everything comes from **our own data** for both competitions: the match-events
-JSONs in `PyCharmMiscProject` plus the fixtures CSVs (`round` = gameweek).
-Player identities are taken straight from the lineups, and each player's
-GK/DEF/MID/FWD category is a majority vote over where they *actually lined up*
-(detailed positions per match) — not any career-level label. The local FPL
-snapshot in `data/raw/` is only used to attach EPL player photos (cosmetic;
-players without a photo fall back to initials).
+**Premier League 2026/27** comes entirely from the FPL API:
 
-- `web/data/core.json` — teams, players, fixtures, gameweeks
-- `web/data/gw1.json` … `gw38.json` — per-player, per-fixture stats for scoring
-- `data/raw/` — FPL API snapshot (players/teams) + matching reports
-
-World Cup data is fully self-contained: fixtures from
-`world-cup-2026_fixtures.csv` (round column), stats and player identities
-straight from `match_events_world_cup_2026` lineups (FotMob player ids,
-photos/badges from FotMob's image CDN).
-
-Rebuild with:
+- `data/raw/2627/` — snapshots of `bootstrap-static`, `fixtures` and
+  `event/{gw}/live` (finished, data-checked gameweeks aren't re-fetched)
+- `web/data/epl2627/core.json` — clubs, players, fixtures, gameweeks
+- `web/data/epl2627/gw1.json` … — per-player, per-fixture FPL stats
 
 ```
-python build_data.py                # build both competitions
-python build_data.py epl            # Premier League only
-python build_data.py wc             # World Cup only (run after each WC matchday)
-python build_data.py transform-fpl  # legacy: build from the FPL API snapshots
-python build_data.py download       # refresh the FPL snapshot (new season)
+python build_data.py fpl            # fetch from the FPL API + rebuild
+python build_data.py fpl-transform  # rebuild from data/raw/2627 only
 ```
 
-Lineup/event players are matched to FPL identities by name within club (with
-league-wide fallback for mid-season transfers); every 25/26 lineup appearance
-resolves, and attributed goals reconcile exactly with fixture scores (1045).
+Player photos and club badges load from the Premier League CDN with a
+graceful fallback to initials.
 
-Note: the EPL 25/26 match files use SofaScore ids while the World Cup files
-use FotMob ids — each competition keys its players consistently within itself,
-so this doesn't matter in practice.
+**Archived games** (Premier League 2025/26, World Cup 2026) were built from our
+own match-events JSONs in `PyCharmMiscProject` and stay in `web/data/epl` and
+`web/data/wc2026` so saved teams keep working:
 
-Player photos and club badges are loaded from the Premier League CDN with a
-graceful fallback to initials, so the app still works fully offline.
+```
+python build_data.py                # build both archived competitions
+python build_data.py epl            # Premier League 25/26 only
+python build_data.py wc             # World Cup 2026 only
+python build_data.py download       # refresh the 25/26 FPL snapshot (photos)
+```
 
-## Next season (26/27)
+## Next season (27/28)
 
-When the new season starts: point `build_data.py` at the live FPL API again
-(it will pick up the 26/27 bootstrap/fixtures automatically once the game
-resets), re-run it after each gameweek, and the same app plays the new season.
+When FPL resets for 27/28, bump `FPL_SEASON`, `FPL_COMP` and `FPL_RAW` in
+`build_data.py` and `LIVE_SITE_COMP` (plus a `COMP_LABELS` entry) in
+`web/app.js`, then run `deploy.bat`. Using a new comp id keeps the old
+season's saved teams and data intact.
