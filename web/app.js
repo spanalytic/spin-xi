@@ -35,6 +35,14 @@ const FORMATIONS = {
               ["LM",11,47],["CM",37,52],["CM",63,52],["RM",89,47],["ST",50,20]],
 };
 
+// where a slot sits on the drawn pitch: pulled in from the touchlines and
+// spread so name/points plates never overlap the line behind
+function placeSlot(el, slot) {
+  const y = slot.y >= 90 ? 88 : 12 + (slot.y - 16) * (54 / 62);
+  el.style.left = 12 + slot.x * 0.76 + "%";
+  el.style.top = y + "%";
+}
+
 // no longer selectable, kept so saved teams from history still render
 const RETIRED_FORMATIONS = new Set(["4-2-3-1"]);
 
@@ -258,6 +266,8 @@ function scorePlayer(rows, cat, pendingFixture) {
 const SCREENS = ["screen-home", "screen-setup", "screen-game", "screen-results", "screen-board", "screen-howto"];
 function show(screen) {
   for (const id of SCREENS) $(id).classList.toggle("hidden", id !== screen);
+  const tab = screen === "screen-game" ? "screen-setup" : screen;
+  document.querySelectorAll(".nav-tab").forEach((b) => b.classList.toggle("sel", b.dataset.screen === tab));
   window.scrollTo(0, 0);
 }
 
@@ -306,13 +316,15 @@ function fmtDur(ms) {
 
 function renderLiveCard() {
   const lc = $("live-card");
+  const fc = $("live-fixtures-card");
   const ev = liveRound();
   if (!ev) {
+    fc.classList.add("hidden");
     lc.innerHTML = `
-      <div class="live-tag done">PREMIER LEAGUE</div>
+      <div class="hero-tag done">Premier League</div>
       <h1>${S.core.season}</h1>
-      <p class="live-sub">Fixtures for the new gameweek are on their way.</p>
-      <button class="big-btn" id="live-play">▶ ENTER TEAM</button>`;
+      <p class="hero-sub">Fixtures for the new gameweek are on their way.</p>
+      <button class="big-btn lime" id="live-play">Enter a team</button>`;
     $("live-play").addEventListener("click", () => goSetup());
     return;
   }
@@ -321,26 +333,36 @@ function renderLiveCard() {
   const diff = dl - Date.now();
   const open = entriesOpen(ev.gw);
   const cd = ev.finished
-    ? "round complete — entries closed"
-    : diff > 0 ? `entries close at first kick-off — ${fmtDur(diff)} left`
-    : "round in progress — entries closed";
-  const fx = S.core.fixtures.filter((f) => f.gw === ev.gw);
-  const fxHtml = fx.map((f) => {
-    const h = S.teamsById[f.h], a = S.teamsById[f.a];
-    const ko = new Date(f.ko).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    const mid = f.hs !== null && f.hs !== undefined ? `<b>${f.hs}–${f["as"]}</b>` : ko;
-    return `<div class="lf-row"><span class="lf-team">${h ? h.name : "TBC"}</span><span class="lf-mid">${mid}</span><span class="lf-team away">${a ? a.name : "TBC"}</span></div>`;
-  }).join("");
+    ? "Round complete"
+    : diff > 0 ? `Entries close in ${fmtDur(diff)}`
+    : "Round in progress";
   lc.innerHTML = `
-    <div class="live-tag">${ev.finished ? "ROUND COMPLETE" : "● LIVE ROUND"}</div>
-    <h1>${COMP_LABELS[S.comp]} ${ev.name}</h1>
-    <div class="deadline">⏰ First kick-off ${fmt} <span class="cd">· ${cd}</span></div>
+    <img class="hero-art" src="img/logo.svg" alt="">
+    <div class="hero-tag${ev.finished ? " done" : ""}">${ev.finished ? "Round complete" : '<span class="pulse"></span>Live round'}</div>
+    <h1>${COMP_LABELS[S.comp]}<br>${ev.name}</h1>
+    <div class="hero-meta">
+      <span>First kick-off <b>${fmt}</b></span>
+      <span class="countdown">${cd}</span>
+    </div>
     ${open
-      ? `<button class="big-btn" id="live-play">▶ ENTER ${(ev.short || "GW " + ev.gw).toUpperCase()} TEAM</button>`
-      : `<div class="entries-closed">🔒 Entries closed — the first game has kicked off</div>`}
-    <div class="live-fixtures">${fxHtml}</div>`;
+      ? `<button class="big-btn lime" id="live-play">Enter your ${ev.short || "GW " + ev.gw} team</button>`
+      : `<div class="entries-closed">Entries are closed. The first game has kicked off.</div>`}`;
   const lp = $("live-play");
   if (lp) lp.addEventListener("click", () => goSetup({ lockedGw: ev.gw }));
+
+  const fx = S.core.fixtures.filter((f) => f.gw === ev.gw);
+  fc.classList.toggle("hidden", fx.length === 0);
+  fc.innerHTML = `<h3>${ev.name} fixtures</h3><div class="live-fixtures">${fx.map((f) => {
+    const h = S.teamsById[f.h], a = S.teamsById[f.a];
+    const ko = new Date(f.ko);
+    const mid = f.hs !== null && f.hs !== undefined
+      ? `<b>${f.hs} – ${f["as"]}</b>`
+      : `${ko.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}<br>${ko.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+    return `<div class="lf-row">
+      <span class="lf-team"><span>${h ? h.name : "TBC"}</span>${teamBadge(h)}</span>
+      <span class="lf-mid">${mid}</span>
+      <span class="lf-team away">${teamBadge(a)}<span>${a ? a.name : "TBC"}</span></span></div>`;
+  }).join("")}</div>`;
 }
 
 function renderHome() {
@@ -353,6 +375,7 @@ function renderHome() {
   for (const h of hist) if (!(h.gw in latestByGw)) latestByGw[h.gw] = h.score;
   const seasonTotal = Object.values(latestByGw).reduce((t, x) => t + x, 0);
 
+  $("season-summary").classList.toggle("hidden", entries === 0);
   $("season-summary").innerHTML = entries === 0 ? "" : `
     <div class="stat-card"><div class="num">${seasonTotal}</div><div class="lbl">Season total</div></div>
     <div class="stat-card"><div class="num">${best}</div><div class="lbl">Best gameweek</div></div>
@@ -360,7 +383,7 @@ function renderHome() {
 
   const list = $("history-list");
   if (hist.length === 0) {
-    list.innerHTML = `<div class="history-empty">No teams yet — spin up your first XI!</div>`;
+    list.innerHTML = `<div class="history-empty">No teams yet. Spin up your first XI!</div>`;
     return;
   }
   list.innerHTML = "";
@@ -370,8 +393,9 @@ function renderHome() {
     const date = new Date(h.ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     row.innerHTML = `
       <div class="history-gw">${h.label || "GW " + h.gw}</div>
-      <div class="history-meta">${COMP_LABELS[entryComp(h)]} &middot; ${h.formation} &middot; picked ${date}</div>
-      <div class="history-score">${h.score} pts</div>
+      <div class="history-meta">${COMP_LABELS[entryComp(h)]} &middot; ${h.formation} &middot; picked ${date}
+        ${teamFaces(h.picks)}</div>
+      <div class="history-score">${h.score}<small>pts</small></div>
       <button class="history-del" title="Delete">✕</button>`;
     row.addEventListener("click", () => viewHistoryEntry(h));
     row.querySelector(".history-del").addEventListener("click", (e) => {
@@ -381,6 +405,14 @@ function renderHome() {
     });
     list.appendChild(row);
   }
+}
+
+// a row of small photos for a saved team (captain first)
+function teamFaces(picks, captain, cls = "faces") {
+  if (!picks) return "";
+  const ids = captain ? [captain, ...picks.filter((id) => id !== captain)] : picks;
+  const html = ids.map((id) => S.playersById[id]).filter(Boolean).map((p) => playerPhoto(p)).join("");
+  return html ? `<div class="${cls}">${html}</div>` : "";
 }
 
 // re-score saved teams from the latest data so the season total stays current
@@ -533,7 +565,7 @@ function renderGameStatus() {
   const n = filledCount();
   $("game-status").innerHTML = `
     <span><b>${gwLabel(S.game.gw)}</b> &middot; ${S.game.formation}</span>
-    <span class="status-count">${n} / 11 picked</span>`;
+    <span class="status-count">${n}<small> / 11 picked</small></span>`;
   $("captain-banner").classList.toggle("hidden", !(n === 11 && !S.game.captain));
   if (n === 11) {
     $("spin-btn").disabled = true;
@@ -547,11 +579,62 @@ function renderGameStatus() {
   }
 }
 
-function faceImg(player, cls) {
-  const initials = `<div class="face-fallback">${player.name.slice(0, 2).toUpperCase()}</div>`;
-  if (!player.img) return initials;
-  return `<img class="${cls}" src="${player.img}"
-    onerror="this.outerHTML='${initials.replace(/"/g, "&quot;")}'">`;
+/* ---------------- images: photos, kit avatars, badges ---------------- */
+
+const svgUri = (svg) => "data:image/svg+xml," + encodeURIComponent(svg);
+
+// a shirt in the club's colours, for players the Premier League has no photo of
+function kitAvatar(team, isGk) {
+  const body = isGk ? "#1f2937" : (team && team.color) || "#64748b";
+  const trim = isGk ? "#c6f432" : (team && team.tcol) || "#ffffff";
+  return svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<rect width="64" height="64" fill="#e6ebf1"/>
+<path d="M23 15l-11 5-6 13 8 4 3-5v26h30V32l3 5 8-4-6-13-11-5c-2 4-5 6-9 6s-7-2-9-6z" fill="${body}" stroke="rgba(0,0,0,.2)" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M23 15c2 4 5 6 9 6s7-2 9-6" fill="none" stroke="${trim}" stroke-width="2.4"/>
+</svg>`);
+}
+
+// a plain shield in the club's colours, if the real badge can't load
+function crestFallback(team) {
+  return svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 46">
+<path d="M20 1l18 6v14c0 12-8 20-18 24C10 41 2 33 2 21V7z" fill="${team.color || "#64748b"}" stroke="rgba(0,0,0,.2)"/>
+<text x="20" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="11" fill="${team.tcol || "#fff"}">${team.short || ""}</text>
+</svg>`);
+}
+
+// <img onerror>: try the alternative URL, then the drawn fallback
+window.imgFail = (img) => {
+  const next = img.dataset.alt;
+  if (next) { img.dataset.alt = ""; img.src = next; return; }
+  img.onerror = null;
+  img.src = img.dataset.fb;
+};
+
+function playerPhoto(p, cls = "") {
+  const fb = kitAvatar(S.teamsById[p.team], p.type === 1);
+  if (!p.img) return `<img class="photo ${cls}" src="${fb}" alt="">`;
+  return `<img class="photo ${cls}" src="${p.img}" alt="" loading="lazy"
+    data-alt="${p.img2 || ""}" data-fb="${fb}" onerror="imgFail(this)">`;
+}
+
+const PL_BADGE = (code) => `https://resources.premierleague.com/premierleague25/badges/${code}.svg`;
+
+function teamBadge(team, cls = "") {
+  if (!team) return "";
+  // badges are saved into the site by the build; the Premier League's copy is the backup
+  const remote = S.comp === LIVE_SITE_COMP ? PL_BADGE(team.code) : "";
+  const src = team.badge || remote;
+  return `<img class="badge-img ${cls}" src="${src}" alt="" title="${escapeHtml(team.name)}"
+    data-alt="${src === remote ? "" : remote}" data-fb="${crestFallback(team)}" onerror="imgFail(this)">`;
+}
+
+// "ARS (H)" for a player whose match is still to come
+function nextOpponent(p, gw) {
+  const f = teamFixtures(p.team, gw).find((x) => x.hs === null || x.hs === undefined);
+  if (!f) return "–";
+  const home = f.h === p.team;
+  const opp = S.teamsById[home ? f.a : f.h];
+  return `${opp ? opp.short : "TBC"} (${home ? "H" : "A"})`;
 }
 
 function renderPitch() {
@@ -561,8 +644,7 @@ function renderPitch() {
   for (const slot of S.game.slots) {
     const el = document.createElement("div");
     el.className = "slot" + (slot.player ? " filled" : "");
-    el.style.left = slot.x + "%";
-    el.style.top = slot.y + "%";
+    placeSlot(el, slot);
     if (slot.player) {
       const isCap = S.game.captain === slot.player.id;
       const pickingCaptain = filledCount() === 11;
@@ -573,9 +655,8 @@ function renderPitch() {
       }
       el.innerHTML = `
         ${isCap ? '<div class="cap-badge">C</div>' : ""}
-        <div class="disc">${faceImg(slot.player, "")}</div>
-        <div class="nameplate">${slot.player.name}</div>
-        <div class="roleplate">${ROLES[slot.role].cat}</div>`;
+        <div class="disc">${playerPhoto(slot.player)}${teamBadge(S.teamsById[slot.player.team])}</div>
+        <div class="nameplate">${escapeHtml(slot.player.name)}</div>`;
       if (pickingCaptain) {
         el.title = isCap ? "Captain selected" : "Pick as captain";
         el.addEventListener("click", () => {
@@ -618,7 +699,7 @@ const REEL_ROW_H = 46;      // must match .reel-row height in the CSS
 function resetSpinner() {
   const box = $("spinner");
   box.classList.remove("landed", "spinning", "blur");
-  box.style.setProperty("--team-color", "#00e5ff");
+  box.style.removeProperty("--team-color");
   const strip = $("reel-strip");
   strip.style.transform = "translateY(0)";
   strip.innerHTML = `<div class="reel-row"></div><div class="reel-row muted">Ready to spin…</div>`;
@@ -646,12 +727,12 @@ function spinWheel() {
   rows.push(teams[Math.floor(Math.random() * teams.length)]);
   const targetIdx = rows.length - 3;
   strip.innerHTML = rows
-    .map((t) => `<div class="reel-row"><span class="dot" style="background:${t.color || "#556"}"></span>${t.name}</div>`)
+    .map((t) => `<div class="reel-row">${teamBadge(t)}${t.name}</div>`)
     .join("");
   strip.style.transform = "translateY(0)";
   box.classList.remove("landed");
   box.classList.add("spinning", "blur");
-  box.style.setProperty("--team-color", "#00e5ff");
+  box.style.removeProperty("--team-color");
 
   // scroll so the winner ends up in the centre band (row 2 of 3 visible)
   const yFinal = (targetIdx - 1) * REEL_ROW_H;
@@ -671,11 +752,10 @@ function spinWheel() {
     strip.style.transform = `translateY(${-yFinal}px)`;
     box.classList.remove("spinning", "blur");
     box.classList.add("landed");
-    box.style.setProperty("--team-color", target.color || "#00e5ff");
+    if (target.color) box.style.setProperty("--team-color", target.color);
     playLandingSound();
     const rowEl = strip.children[targetIdx];
-    rowEl.innerHTML = `<img class="reel-badge" src="${target.badge || ""}"
-      onerror="this.style.display='none'"><b>${target.name}</b>`;
+    rowEl.innerHTML = `${teamBadge(target)}<b>${target.name}</b>`;
     setTimeout(() => onWheelLanded(target), 650);
   }
 
@@ -700,11 +780,6 @@ function onWheelLanded(team) {
 
 /* ---------------- player picker ---------------- */
 
-function badgeImg(team) {
-  const url = team.badge || `https://resources.premierleague.com/premierleague/badges/70/t${team.code}.png`;
-  return `<img class="badge" src="${url}" onerror="this.style.display='none'">`;
-}
-
 function teamFixtures(teamId, gw) {
   return S.core.fixtures.filter((f) => f.gw === gw && (f.h === teamId || f.a === teamId));
 }
@@ -717,7 +792,7 @@ function gwLabel(gw) {
 function fixturesLabel(team, gw) {
   const fx = teamFixtures(team.id, gw);
   if (fx.length === 0) {
-    return `<span class="fixt warn">⚠ No fixture in ${gwLabel(gw)} — these players can't score!</span>`;
+    return `<span class="fixt warn">No fixture in ${gwLabel(gw)}, so these players can't score</span>`;
   }
   const parts = fx.map((f) => {
     const home = f.h === team.id;
@@ -725,7 +800,7 @@ function fixturesLabel(team, gw) {
     return `${opp ? opp.name : "TBC"} <b>(${home ? "H" : "A"})</b>`;
   });
   const pending = fx.some((f) => f.hs === null || f.hs === undefined);
-  return `<span class="fixt">${gwLabel(gw)}: vs ${parts.join(" &amp; vs ")}${pending ? " · ⏳ not played yet" : ""}</span>`;
+  return `<span class="fixt">${gwLabel(gw)}: vs ${parts.join(" &amp; vs ")}${pending ? " · not played yet" : ""}</span>`;
 }
 
 function playsThisGw(p) {
@@ -763,7 +838,9 @@ function openPicker(team) {
     .map(([cat, n]) => `${n} ${CAT_LABEL[cat].toLowerCase()}${n > 1 ? "s" : ""}`)
     .join(" · ");
   const head = $("picker-head");
-  head.innerHTML = `${badgeImg(team)}
+  head.style.setProperty("--club", team.color || "");
+  head.style.setProperty("--club-text", team.tcol || "");
+  head.innerHTML = `<div class="crest">${teamBadge(team)}</div>
     <div>
       <div class="club">${team.name}</div>
       <div class="fixture-line">${fixturesLabel(team, S.game.gw)}</div>
@@ -776,7 +853,7 @@ function openPicker(team) {
   if (pickable.length === 0) {
     body.innerHTML = `
       <div class="picker-empty">
-        <div>😬 <b>${team.name}</b> have no players that fit your remaining positions.</div>
+        <div><b>${team.name}</b> have no players that fit your remaining positions.</div>
         <button class="big-btn" id="respin-btn">Spin Again</button>
       </div>`;
     $("respin-btn").addEventListener("click", () => { closePicker(); spinWheel(); });
@@ -802,10 +879,10 @@ function playerRow(p, team, pickable, pending) {
   const dnp = (pending || playsThisGw(p)) ? "" : `<span class="dnp">Does not play this GW · </span>`;
   // FPL's injury news is current, so it's only shown for fixtures still to come
   const av = pending ? availability(p) : null;
-  const flag = av ? `<span class="avail ${av.out ? "out" : "doubt"}" title="${escapeHtml(av.news)}">${av.out ? "⛔" : "⚠️"} ${av.label}</span>` : "";
+  const flag = av ? `<span class="avail ${av.out ? "out" : "doubt"}" title="${escapeHtml(av.news)}">${av.label}</span>` : "";
   const news = av && av.news ? `<div class="player-news ${av.out ? "out" : "doubt"}">${escapeHtml(av.news)}</div>` : "";
   row.innerHTML = `
-    ${faceImg(p, "face")}
+    ${playerPhoto(p)}
     <div class="player-main">
       <div class="player-name">${p.name}${flag}</div>
       <div class="player-sub">${dnp}${p.full !== p.name ? p.full + " · " : ""}${p.mins} mins · ${p.g}G ${p.a}A this season</div>
@@ -1067,7 +1144,7 @@ async function renderBoard() {
   body.innerHTML = `<div class="history-empty">Loading leaderboard…</div>`;
   const members = (await lbRead("members")) || [];
   if (members.length === 0) {
-    body.innerHTML = `<div class="history-empty">Nobody on the board yet — finish a team to join, even while scores are still 0.</div>`;
+    body.innerHTML = `<div class="history-empty">Nobody on the board yet. Enter a team to join, even while scores are still 0.</div>`;
     return;
   }
   const playersData = (await Promise.all(members.map((m) => lbRead(`p_${m}`)))).filter(Boolean);
@@ -1097,7 +1174,7 @@ async function renderBoard() {
   if (!rows.length) {
     body.innerHTML = view === "season"
       ? `<div class="history-empty">No teams on the board this season yet.</div>`
-      : `<div class="history-empty">No ${gwLabel(view)} teams on the board yet — enter a team to join, even while scores are still 0.</div>`;
+      : `<div class="history-empty">No ${gwLabel(view)} teams on the board yet. Enter a team to join, even while scores are still 0.</div>`;
     return;
   }
   if (view === "season") renderSeasonBoard(body, rows, me);
@@ -1105,7 +1182,7 @@ async function renderBoard() {
 }
 
 function rankCell(i) {
-  return i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1;
+  return `<div class="board-rank${i < 3 ? " r" + (i + 1) : ""}">${i + 1}</div>`;
 }
 
 function renderGwBoard(body, rows, me) {
@@ -1115,6 +1192,9 @@ function renderGwBoard(body, rows, me) {
     || (a.entry.ts || 0) - (b.entry.ts || 0));
   const seen = {};
   body.innerHTML = "";
+  const list = document.createElement("div");
+  list.className = "board-list";
+  body.appendChild(list);
   rows.forEach((r, i) => {
     const count = (seen[r.name] = (seen[r.name] || 0) + 1);
     const name = count > 1 ? `${r.name} #${count}` : r.name;
@@ -1124,18 +1204,19 @@ function renderGwBoard(body, rows, me) {
     row.className = "board-row" + (r.name === me ? " me" : "");
     row.title = "View team";
     row.innerHTML = `
-      <div class="board-rank">${rankCell(i)}</div>
+      ${rankCell(i)}
       <div class="board-player">
         <div class="board-pname">${escapeHtml(name)}</div>
         <div class="board-chips">
-          <span class="bchip${r.pending ? " pend" : ""}">${escapeHtml(label)}: ${r.total}${r.pending ? " ⏳" : ""}</span>
+          <span class="bchip">${escapeHtml(label)}</span>
           <span class="bchip">${escapeHtml(r.entry.formation || "Formation")}</span>
           ${time ? `<span class="bchip">${escapeHtml(time)}</span>` : ""}
         </div>
       </div>
+      ${teamFaces(r.entry.picks, r.entry.captain, "board-faces")}
       <div class="board-total">${r.total}${r.pending ? '<span class="board-live">live</span>' : ""}</div>`;
     row.addEventListener("click", () => viewBoardEntry(r.entry, r.name));
-    body.appendChild(row);
+    list.appendChild(row);
   });
 }
 
@@ -1158,19 +1239,22 @@ function renderSeasonBoard(body, rows, me) {
   });
   table.sort((a, b) => b.total - a.total || b.gwRows.length - a.gwRows.length);
   body.innerHTML = "";
+  const list = document.createElement("div");
+  list.className = "board-list";
+  body.appendChild(list);
   table.forEach((p, i) => {
     const row = document.createElement("div");
-    row.className = "board-row" + (p.name === me ? " me" : "");
+    row.className = "board-row static" + (p.name === me ? " me" : "");
     const chips = p.gwRows.map((r) =>
-      `<span class="bchip${r.pending ? " pend" : ""}">${escapeHtml(r.entry.label || "GW " + r.entry.gw)}: ${r.total}${r.pending ? " ⏳" : ""}</span>`).join("");
+      `<span class="bchip${r.pending ? " pend" : ""}">${escapeHtml(r.entry.label || "GW " + r.entry.gw)}: ${r.total}${r.pending ? " live" : ""}</span>`).join("");
     row.innerHTML = `
-      <div class="board-rank">${rankCell(i)}</div>
+      ${rankCell(i)}
       <div class="board-player">
         <div class="board-pname">${escapeHtml(p.name)}</div>
         <div class="board-chips">${chips}</div>
       </div>
       <div class="board-total">${p.total}${p.pending ? '<span class="board-live">live</span>' : ""}</div>`;
-    body.appendChild(row);
+    list.appendChild(row);
   });
 }
 
@@ -1211,12 +1295,33 @@ function renderResults(game, stats, opts = {}) {
     rows.push({ slot, p, res, cat, isCap });
   }
 
+  const cap = game.captain && S.playersById[game.captain];
   $("results-head").innerHTML = `
-    <div class="total">${total} pts</div>
-    <div class="sub">${gwLabel(game.gw)} &middot; <span class="formation-tag">${game.formation}</span>
-      ${opts.ownerName ? `&middot; ${escapeHtml(opts.ownerName)}'s team` : ""}
-      ${opts.readonly ? "&middot; saved team" : ""}
-      ${stillToPlay ? `&middot; <span class="pending-note">⏳ ${stillToPlay} player${stillToPlay > 1 ? "s" : ""} still to play — score will update</span>` : ""}</div>`;
+    <div>
+      <div class="kicker">${gwLabel(game.gw)} &middot; <span class="formation-tag">${game.formation}</span></div>
+      <div class="owner">${opts.ownerName ? `${escapeHtml(opts.ownerName)}'s team` : "Your team"}</div>
+      <div class="sub">${cap ? `Captain <b>${escapeHtml(cap.name)}</b>` : ""}
+        ${stillToPlay ? ` &middot; <span class="pending-note">${stillToPlay} player${stillToPlay > 1 ? "s" : ""} still to play</span>` : ""}</div>
+    </div>
+    <div class="total-box"><div class="total">${total}</div><div class="total-lbl">${stillToPlay ? "points so far" : "points"}</div></div>`;
+
+  // the team on a pitch, in the formation it was entered in
+  const pitch = $("results-pitch");
+  pitch.innerHTML = `<div class="pen-box bottom"></div><div class="six-box bottom"></div>`;
+  for (const { slot, p, res, isCap } of rows) {
+    const el = document.createElement("div");
+    el.className = "slot" + (p ? " filled" : "");
+    placeSlot(el, slot);
+    el.innerHTML = p
+      ? `${isCap ? '<div class="cap-badge">C</div>' : ""}
+         <div class="disc">${playerPhoto(p)}${teamBadge(S.teamsById[p.team])}</div>
+         <div class="nameplate">${escapeHtml(p.name)}</div>
+         ${res.pending
+           ? `<div class="ptsplate pend">${nextOpponent(p, game.gw)}</div>`
+           : `<div class="ptsplate${isCap ? " cap" : ""}">${res.total}</div>`}`
+      : `<div class="disc">${ROLES[slot.role].cat}</div>`;
+    pitch.appendChild(el);
+  }
 
   const list = $("results-list");
   list.innerHTML = "";
@@ -1232,11 +1337,12 @@ function renderResults(game, stats, opts = {}) {
       })
       .join("");
     const ptsCls = res.total > 0 ? "pos" : res.total < 0 ? "neg" : "zero";
+    const team = p ? S.teamsById[p.team] : null;
     row.innerHTML = `
-      ${p ? faceImg(p, "face") : '<div class="face-fallback">?</div>'}
+      ${p ? playerPhoto(p) : ""}
       <div class="result-main">
-        <div class="result-name">${p ? p.name : "(empty)"}${isCap ? ' <span class="cap-tag">C</span>' : ""}</div>
-        <div class="result-role">${cat}${p ? " · " + (S.teamsById[p.team]?.short || "") : ""}</div>
+        <div class="result-name">${p ? escapeHtml(p.name) : "(empty)"}${team ? teamBadge(team) : ""}${isCap ? '<span class="cap-tag">C</span>' : ""}</div>
+        <div class="result-role">${CAT_LABEL[cat]}${team ? " · " + team.name : ""}</div>
         <div class="break-chips">${chips}</div>
       </div>
       <div class="result-pts ${ptsCls}">${res.pending ? "–" : res.total}</div>`;
@@ -1276,19 +1382,19 @@ async function finishGame() {
   note.className = "submit-note";
   $("results-head").appendChild(note);
   if (!entriesOpen(entry.gw)) {
-    note.innerHTML = "🔒 Entries closed for this round — saved as a practice team (not on the leaderboard).";
+    note.innerHTML = "Entries had closed for this round, so this is saved as a practice team and isn't on the leaderboard.";
   } else if (playerName()) {
     queuePendingSubmit(entry);
     note.textContent = "Submitting to leaderboard…";
     lbSubmit(entry).then((ok) => {
       if (ok) {
-        note.innerHTML = `✔ On the leaderboard as <b>${playerName()}</b>`;
+        note.innerHTML = `On the leaderboard as <b>${escapeHtml(playerName())}</b>`;
       } else {
         renderSubmitRetry(note, entry);
       }
     });
   } else {
-    note.innerHTML = `<button class="nav-btn" id="join-board">🏆 Join the leaderboard</button>`;
+    note.innerHTML = `<button class="nav-btn" id="join-board">Join the leaderboard</button>`;
     $("join-board").addEventListener("click", () => {
       S.pendingSubmit = entry;
       goBoard();
@@ -1298,7 +1404,7 @@ async function finishGame() {
 
 function renderSubmitRetry(note, entry) {
   S.pendingSubmit = entry;
-  note.textContent = "⚠ Leaderboard submit failed — your team is saved locally. ";
+  note.textContent = "Couldn't reach the leaderboard. Your team is saved on this device. ";
   const btn = document.createElement("button");
   btn.className = "nav-btn";
   btn.textContent = "Retry leaderboard submit";
@@ -1307,7 +1413,7 @@ function renderSubmitRetry(note, entry) {
     const ok = await lbSubmit(entry);
     if (ok) {
       S.pendingSubmit = null;
-      note.innerHTML = `✔ On the leaderboard as <b>${playerName()}</b>`;
+      note.innerHTML = `On the leaderboard as <b>${escapeHtml(playerName())}</b>`;
     } else {
       renderSubmitRetry(note, entry);
     }

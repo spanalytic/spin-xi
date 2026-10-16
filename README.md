@@ -112,8 +112,12 @@ python build_data.py fpl            # fetch from the FPL API + rebuild
 python build_data.py fpl-transform  # rebuild from data/raw/2627 only
 ```
 
-Player photos and club badges load from the Premier League CDN with a
-graceful fallback to initials.
+Club badges are saved into the site (`web/img/badges`) by the build.
+Player photos load from the Premier League's image server; the build records
+which photo address works for each player (`data/raw/2627/photos.json`,
+re-checked every few days for players without one), and players with no
+photo get a shirt in their club's colours instead.
+`python build_data.py fpl-assets` does just this step.
 
 **Archived games** (Premier League 2025/26, World Cup 2026) were built from our
 own match-events JSONs in `PyCharmMiscProject` and stay in `web/data/epl` and

@@ -6,6 +6,7 @@ every stat, position and bonus point matches fantasy.premierleague.com:
     python build_data.py fpl            # fetch the latest FPL data + rebuild (web/data/epl2627)
     python build_data.py fpl-transform  # rebuild from the snapshots in data/raw/2627
     python build_data.py fpl-due        # is a match on? (the scheduled refresh checks this)
+    python build_data.py fpl-assets     # save club badges + check which player photos exist
 
 Archived competitions, built from our own match-events files:
 
@@ -858,6 +859,78 @@ def download_fpl(raw=FPL_RAW):
     print("FPL download complete")
 
 
+PHOTO_URLS = {
+    # the 2025 Premier League site moved photos; newer players only exist there
+    "pl25": "https://resources.premierleague.com/premierleague25/photos/players/110x140/{code}.png",
+    "legacy": "https://resources.premierleague.com/premierleague/photos/players/110x140/p{code}.png",
+}
+BADGE_URL = "https://resources.premierleague.com/premierleague25/badges/{code}.svg"
+BADGE_DIR = ROOT / "web" / "img" / "badges"
+PHOTO_RECHECK_DAYS = 3                  # players without a photo get one eventually
+
+
+def url_ok(url):
+    try:
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status == 200 and len(r.read(64)) > 0
+    except Exception:
+        return False
+
+
+def download_fpl_assets(raw=FPL_RAW):
+    """Club badges (saved into the site so they always load) and which photo
+    URL works for each player (cached; players with no photo get a kit
+    avatar in the browser and are re-checked every few days)."""
+    from concurrent.futures import ThreadPoolExecutor
+    bootstrap = json.loads((raw / "bootstrap.json").read_text(encoding="utf-8"))
+    BADGE_DIR.mkdir(parents=True, exist_ok=True)
+    for t in bootstrap["teams"]:
+        path = BADGE_DIR / f"t{t['code']}.svg"
+        if path.exists():
+            continue
+        try:
+            req = urllib.request.Request(BADGE_URL.format(code=t["code"]), headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=20) as r:
+                body = r.read()
+            if body.lstrip().startswith(b"<"):
+                path.write_bytes(body)
+                print(f"saved badge for {t['name']}")
+        except Exception as e:
+            print(f"badge for {t['name']} unavailable: {e}")
+
+    cache_path = raw / "photos.json"
+    cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
+    now = time.time()
+    todo = [el["code"] for el in bootstrap["elements"]
+            if str(el["code"]) not in cache
+            or (not cache[str(el["code"])]["src"]
+                and now - cache[str(el["code"])]["t"] > PHOTO_RECHECK_DAYS * 86400)]
+
+    def resolve(code):
+        for src, pat in PHOTO_URLS.items():
+            if url_ok(pat.format(code=code)):
+                return code, src
+        return code, ""
+
+    with ThreadPoolExecutor(12) as pool:
+        for code, src in pool.map(resolve, todo):
+            cache[str(code)] = {"src": src, "t": int(now)}
+    if todo:
+        cache_path.write_text(json.dumps(cache, sort_keys=True), encoding="utf-8")
+    have = sum(1 for el in bootstrap["elements"] if cache.get(str(el["code"]), {}).get("src"))
+    print(f"photos: checked {len(todo)}, {have}/{len(bootstrap['elements'])} players have one")
+
+
+def fpl_photo(code, cache=None):
+    """(img, fallback img) for a player; '' img means no photo exists."""
+    hit = (cache or {}).get(str(code))
+    if hit is not None:
+        return (PHOTO_URLS[hit["src"]].format(code=code) if hit["src"] else ""), ""
+    # not checked yet: let the browser try both
+    return PHOTO_URLS["pl25"].format(code=code), PHOTO_URLS["legacy"].format(code=code)
+
+
 def fpl_refresh_due(raw=FPL_RAW, now=None):
     """Should the scheduled job fetch from FPL right now? Keeps API calls to
     match windows instead of hitting FPL every few minutes all week."""
@@ -902,7 +975,8 @@ def transform_fpl(raw=FPL_RAW, comp=FPL_COMP, season=FPL_SEASON):
             "id": t["id"], "name": t["name"], "short": short, "code": t["code"],
             "color": EPL_COLORS.get(short) or EXTRA_COLORS.get(short, "#444444"),
             "tcol": "#1a1a2e" if short in EPL_DARK_TEXT | EXTRA_DARK_TEXT else "#ffffff",
-            "badge": f"https://resources.premierleague.com/premierleague/badges/70/t{t['code']}.png",
+            "badge": (f"img/badges/t{t['code']}.svg" if (BADGE_DIR / f"t{t['code']}.svg").exists()
+                      else BADGE_URL.format(code=t["code"])),
         })
 
     # postponed fixtures have no gameweek until FPL reschedules them
@@ -967,15 +1041,19 @@ def transform_fpl(raw=FPL_RAW, comp=FPL_COMP, season=FPL_SEASON):
             "checked": bool(ev.get("data_checked")),   # FPL has confirmed final points
         })
 
+    photo_cache_path = raw / "photos.json"
+    photo_cache = (json.loads(photo_cache_path.read_text(encoding="utf-8"))
+                   if photo_cache_path.exists() else None)
     players = []
     for el in elements:
+        img, img2 = fpl_photo(el["code"], photo_cache)
         tot = season_totals.get(el["id"], {"mp": 0, "gs": 0, "a": 0, "gp": 0, "pts": 0})
         players.append({
             "id": el["id"], "code": el["code"],
             "name": el["web_name"],
             "full": f"{el['first_name']} {el['second_name']}".strip(),
             "team": el["team"], "type": el["element_type"], "pos": [],
-            "img": f"https://resources.premierleague.com/premierleague/photos/players/110x140/p{el['code']}.png",
+            "img": img, **({"img2": img2} if img2 else {}),
             "mins": tot["mp"], "g": tot["gs"], "a": tot["a"],
             "gp": tot["gp"], "pts": tot["pts"],
         })
@@ -1001,7 +1079,10 @@ if __name__ == "__main__":
         download()                      # snapshot the FPL API (bootstrap etc.)
     elif cmd == "fpl":
         download_fpl()                  # Premier League 26/27: fetch from the FPL API
+        download_fpl_assets()
         transform_fpl()
+    elif cmd == "fpl-assets":
+        download_fpl_assets()           # badges + player photo check only
     elif cmd == "fpl-due":
         due, why = fpl_refresh_due()    # used by the scheduled GitHub job
         print(f"due={'true' if due else 'false'}  # {why}")
