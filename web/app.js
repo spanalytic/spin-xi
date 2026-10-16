@@ -150,6 +150,18 @@ async function loadComp(comp) {
   renderCompSwitch();
 }
 
+// drop cached match data and fetch it again (scores refresh during matches)
+async function reloadData() {
+  if (S.game) return false;          // never swap data under a team being picked
+  const comp = S.comp;
+  delete S.cores[comp];
+  for (const key of Object.keys(S.gwStatsCache)) {
+    if (key.startsWith(comp + ":")) delete S.gwStatsCache[key];
+  }
+  await loadComp(comp);
+  return true;
+}
+
 function renderCompSwitch() {
   const el = $("comp-switch");
   el.innerHTML = "";
@@ -1308,7 +1320,10 @@ async function init() {
   $("nav-new").addEventListener("click", () => goSetup());
   $("nav-board").addEventListener("click", goBoard);
   $("nav-howto").addEventListener("click", () => show("screen-howto"));
-  $("board-refresh").addEventListener("click", renderBoard);
+  $("board-refresh").addEventListener("click", async () => {
+    try { await reloadData(); } catch (e) { console.warn("data reload failed", e); }
+    renderBoard();
+  });
   $("board-name-save").addEventListener("click", async () => {
     const name = $("board-name").value.trim();
     if (!name) return;
@@ -1348,6 +1363,20 @@ async function init() {
   setInterval(() => {
     if (S.core && !$("screen-home").classList.contains("hidden")) renderLiveCard();
   }, 30000);
+  // pick up fresh scores (the data is republished every ~10 min during matches)
+  setInterval(async () => {
+    const onHome = !$("screen-home").classList.contains("hidden");
+    const onBoard = !$("screen-board").classList.contains("hidden");
+    if (!onHome && !onBoard) return;
+    try {
+      if (!(await reloadData())) return;
+    } catch (e) { console.warn("data reload failed", e); return; }
+    if (onHome && !$("screen-home").classList.contains("hidden")) {
+      renderHome();                  // no show(): keep the reader's scroll position
+      if (await refreshHistoryScores()) renderHome();
+    }
+    if (onBoard && !$("screen-board").classList.contains("hidden")) renderBoard();
+  }, 5 * 60 * 1000);
   $("spin-btn").addEventListener("click", spinWheel);
   $("score-btn").addEventListener("click", finishGame);
   $("abandon-btn").addEventListener("click", () => {
