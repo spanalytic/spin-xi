@@ -4,6 +4,9 @@ rem   deploy.bat          - fetch the latest FPL stats, rebuild + publish
 rem   deploy.bat offline  - rebuild from the FPL snapshots already in data\raw\2627 + publish
 cd /d "%~dp0"
 
+rem pick up any score refreshes the scheduled GitHub job has pushed
+git pull --rebase origin main
+
 if "%1"=="offline" (
   C:\Users\thoma\PyCharmMiscProject\.venv\Scripts\python.exe build_data.py fpl-transform
 ) else (

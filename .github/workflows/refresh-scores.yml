@@ -1,0 +1,72 @@
+name: Refresh FPL scores
+
+# Every 10 minutes GitHub wakes this job; it only calls the FPL API while a
+# match is on (plus an hourly check until FPL confirms a gameweek's final
+# points, and a daily fixture check). When the scores change it commits the
+# new data to main and republishes the site to gh-pages.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Fetch even if no match is on"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-scores
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Is a match on?
+        id: due
+        run: |
+          out=$(python build_data.py fpl-due)
+          echo "$out"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "${out%% *}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch from FPL and rebuild
+        if: steps.due.outputs.due == 'true'
+        run: python build_data.py fpl
+
+      - name: Commit and publish if scores changed
+        if: steps.due.outputs.due == 'true'
+        run: |
+          if git diff --quiet -- web/data; then
+            echo "No score changes."
+            exit 0
+          fi
+          git config user.name "spin-xi-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/data data/raw/2627
+          git commit -q -m "Live FPL score refresh"
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main
+          # publish web/ as the gh-pages branch (same as deploy.bat)
+          cd web
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="spin-xi-bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Publish $(git -C .. rev-parse --short HEAD)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages
+          echo "Published."

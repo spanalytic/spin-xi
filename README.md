@@ -38,14 +38,23 @@ Locally: double-click `start.bat`, or run
 
 ## Updating during the season
 
+Scores refresh automatically. The **Refresh FPL scores** GitHub Action
+(`.github/workflows/refresh-scores.yml`) wakes every 10 minutes and, while a
+match is on, fetches the latest stats from FPL, rebuilds, and republishes the
+site when anything changed. After a gameweek it checks hourly until FPL
+confirms the final points, and once a day it picks up rescheduled fixtures.
+Open pages reload the data every 5 minutes (or hit ↻ Refresh on the board).
+Expect scores to trail the real match by roughly 10-15 minutes; GitHub can
+start scheduled jobs late when it's busy.
+
+To run it by hand: GitHub → Actions → Refresh FPL scores → Run workflow.
+
+Manual deploy from your PC still works:
+
 ```
 deploy.bat          fetch the latest FPL stats, rebuild + publish
 deploy.bat offline  rebuild from the FPL snapshots already fetched + publish
 ```
-
-Run `deploy.bat` after each matchday (or whenever you want live scores
-refreshed); players' scores and the leaderboard recompute from the new data.
-Pages' CDN can lag a few minutes after a push.
 
 ## How it works
 

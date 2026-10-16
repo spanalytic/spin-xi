@@ -5,6 +5,7 @@ every stat, position and bonus point matches fantasy.premierleague.com:
 
     python build_data.py fpl            # fetch the latest FPL data + rebuild (web/data/epl2627)
     python build_data.py fpl-transform  # rebuild from the snapshots in data/raw/2627
+    python build_data.py fpl-due        # is a match on? (the scheduled refresh checks this)
 
 Archived competitions, built from our own match-events files:
 
@@ -847,6 +848,34 @@ def download_fpl(raw=FPL_RAW):
     print("FPL download complete")
 
 
+def fpl_refresh_due(raw=FPL_RAW, now=None):
+    """Should the scheduled job fetch from FPL right now? Keeps API calls to
+    match windows instead of hitting FPL every few minutes all week."""
+    from datetime import datetime, timedelta, timezone
+    now = now or datetime.now(timezone.utc)
+    try:
+        bootstrap = json.loads((raw / "bootstrap.json").read_text(encoding="utf-8"))
+        fixtures = json.loads((raw / "fixtures.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return True, "no snapshot yet"
+    # a match is on (or just finished and bonus is being added)
+    for f in fixtures:
+        if not f.get("kickoff_time"):
+            continue
+        ko = datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
+        if ko - timedelta(minutes=5) <= now <= ko + timedelta(hours=3):
+            return True, f"match window (kick-off {f['kickoff_time']})"
+    # a gameweek has started but FPL hasn't confirmed its final points: check hourly
+    started = [e for e in bootstrap["events"]
+               if datetime.fromtimestamp(e["deadline_time_epoch"], timezone.utc) <= now]
+    if any(not e["data_checked"] for e in started) and now.minute < 15:
+        return True, "waiting for FPL to confirm final points"
+    # once a day, pick up rescheduled fixtures
+    if now.hour == 5 and now.minute < 15:
+        return True, "daily fixture check"
+    return False, "no match on"
+
+
 def transform_fpl(raw=FPL_RAW, comp=FPL_COMP, season=FPL_SEASON):
     """Build the app data from FPL API snapshots (bootstrap, fixtures and
     per-gameweek live stats). Player ids, positions and every stat are FPL's
@@ -925,6 +954,7 @@ def transform_fpl(raw=FPL_RAW, comp=FPL_COMP, season=FPL_SEASON):
             # entries lock at the gameweek's first kick-off (FPL's own deadline is earlier)
             "deadline": min(kos) if kos else ev["deadline_time"],
             "finished": bool(gw_fixtures) and all(f["hs"] is not None for f in gw_fixtures),
+            "checked": bool(ev.get("data_checked")),   # FPL has confirmed final points
         })
 
     players = []
@@ -957,6 +987,9 @@ if __name__ == "__main__":
     elif cmd == "fpl":
         download_fpl()                  # Premier League 26/27: fetch from the FPL API
         transform_fpl()
+    elif cmd == "fpl-due":
+        due, why = fpl_refresh_due()    # used by the scheduled GitHub job
+        print(f"due={'true' if due else 'false'}  # {why}")
     elif cmd == "fpl-transform":
         transform_fpl()                 # rebuild from the existing FPL snapshots
     elif cmd == "wc":
