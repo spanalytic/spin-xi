@@ -334,6 +334,14 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
 }
 .slot.respin-select { cursor: pointer; }
 .slot.respin-select:hover .disc { box-shadow: 0 0 0 6px rgba(229, 72, 77, 0.45); border-color: #e5484d; }
+.slot.respin-out .disc {
+  border-color: #e5484d;
+  animation: respin-glow 1.1s ease-in-out infinite alternate;
+}
+@keyframes respin-glow {
+  from { box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.7), 0 0 8px 2px rgba(229, 72, 77, 0.45); }
+  to { box-shadow: 0 0 0 5px rgba(229, 72, 77, 0.9), 0 0 22px 8px rgba(229, 72, 77, 0.6); }
+}
 .slot.cap-select { cursor: pointer; }
 .slot.cap-select:hover .disc { box-shadow: 0 0 0 6px rgba(255, 197, 61, 0.45); }
 .slot.cap-select.cap-prompt .disc { animation: pulse 1s infinite; border-color: var(--gold); }

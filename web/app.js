@@ -726,6 +726,16 @@ async function startRespin(base) {
 function chooseRespinSlot(i) {
   const g = S.game, r = g.respin;
   if (r.slot !== null) g.slots[r.slot].player = r.removed;
+  if (r.slot === i) {
+    // tapped the ringed player again: keep them
+    r.slot = null;
+    r.removed = null;
+    g.captain = r.base.captain;
+    $("spin-btn").disabled = true;
+    renderPitch();
+    renderGameStatus();
+    return;
+  }
   const slot = g.slots[i];
   r.slot = i;
   r.removed = slot.player;
@@ -768,7 +778,7 @@ function renderGameStatus() {
     $("score-btn").classList.add("hidden");
     $("wheel-result").innerHTML = r.slot === null
       ? `<b>Re-spin:</b> tap the player you want to replace.`
-      : `Spin for a new ${CAT_LABEL[ROLES[S.game.slots[r.slot].role].cat].toLowerCase()} to replace <b>${escapeHtml(r.removed.name)}</b>. Tap someone else to change your mind.`;
+      : `Spin for a new ${CAT_LABEL[ROLES[S.game.slots[r.slot].role].cat].toLowerCase()} to replace <b>${escapeHtml(r.removed.name)}</b>. Tap them again, or someone else, to change your mind.`;
     return;
   }
   if (n === 11 && r) {
@@ -884,6 +894,18 @@ function renderPitch() {
           renderPitch();
           renderGameStatus();
         });
+      }
+    } else if (S.game.respin?.slot === i && S.game.respin.removed) {
+      // the player being re-spun stays in view, ringed in red, until replaced
+      const r = S.game.respin, p = r.removed;
+      el.classList.add("filled", "respin-out");
+      el.innerHTML = `
+        <div class="disc">${playerPhoto(p)}${teamBadge(S.teamsById[p.team])}</div>
+        <div class="nameplate">${escapeHtml(p.name)}</div>`;
+      if (!r.spun) {
+        el.classList.add("respin-select");
+        el.title = "Keep this player";
+        el.addEventListener("click", () => chooseRespinSlot(i));
       }
     } else {
       el.innerHTML = `
@@ -2004,8 +2026,8 @@ async function init() {
   $("score-btn").addEventListener("click", finishGame);
   $("abandon-btn").addEventListener("click", () => {
     const msg = S.game?.respin
-      ? "Leave the re-spin? It isn't used until you enter the team, and any club you've spun stays the same."
-      : "Abandon this team? Your picks will be lost.";
+      ? "Go back? Your re-spin isn't used until you enter the team, and any club you've spun stays the same."
+      : "Go back? The picks for this team will be lost.";
     if (confirm(msg)) { S.game = null; goHome(); }
   });
   $("results-again").addEventListener("click", () => goSetup());
