@@ -321,6 +321,16 @@ main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 70px; }
 .player-name { font-weight: 700; font-size: 15px; }
 .player-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .player-sub .dnp { color: var(--red); font-weight: 700; }
+.avail {
+  display: inline-block; margin-left: 8px; vertical-align: 1px;
+  font-size: 10px; font-weight: 800; letter-spacing: .3px;
+  border-radius: 5px; padding: 2px 6px;
+}
+.avail.doubt { background: rgba(255, 210, 74, .16); color: var(--gold); }
+.avail.out { background: rgba(255, 93, 115, .16); color: var(--red); }
+.player-news { font-size: 11px; margin-top: 2px; }
+.player-news.doubt { color: var(--gold); }
+.player-news.out { color: var(--red); }
 .ppg { text-align: right; min-width: 54px; font-weight: 800; font-size: 16px; color: var(--gold); line-height: 1.1; }
 .ppg span { display: block; font-size: 9px; font-weight: 600; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
 .pos-chips { display: flex; gap: 4px; flex-wrap: wrap; }
