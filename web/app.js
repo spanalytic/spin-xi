@@ -877,7 +877,7 @@ function renderPitch() {
         if (!S.game.captain) el.classList.add("cap-prompt");
       }
       el.innerHTML = `
-        ${isCap ? '<div class="cap-badge">C</div>' : ""}
+        ${isCap ? '<div class="cap-badge">C</div>' : ""}${availDot(slot.player, S.game.gw)}
         <div class="disc">${playerPhoto(slot.player)}${teamBadge(S.teamsById[slot.player.team])}</div>
         <div class="nameplate">${escapeHtml(slot.player.name)}</div>`;
       if (pickingCaptain) {
@@ -892,7 +892,7 @@ function renderPitch() {
       // the player being re-spun stays in view, ringed in red, until replaced
       const r = S.game.respin, p = r.removed;
       el.classList.add("filled", "respin-out");
-      el.innerHTML = `
+      el.innerHTML = `${availDot(p, S.game.gw)}
         <div class="disc">${playerPhoto(p)}${teamBadge(S.teamsById[p.team])}</div>
         <div class="nameplate">${escapeHtml(p.name)}</div>`;
       if (!r.spun) {
@@ -1056,6 +1056,18 @@ function availability(p) {
   const label = doubt ? `${p.chance ?? 50}%`
     : { i: "Injured", s: "Suspended", u: "Unavailable", n: "Unavailable" }[p.st] || "Out";
   return { out: !doubt, label, news: p.news || "" };
+}
+
+// FPL's flag for a player whose match this gameweek is still to come
+function upcomingAvail(p, gw) {
+  const pending = teamFixtures(p.team, gw).some((f) => f.hs === null || f.hs === undefined);
+  return pending ? availability(p) : null;
+}
+// small badge for a player's pitch card: "75%" or "OUT", FPL's news on hover
+function availDot(p, gw) {
+  const av = upcomingAvail(p, gw);
+  if (!av) return "";
+  return `<div class="avail-dot ${av.out ? "out" : "doubt"}" title="${escapeHtml(av.news || av.label)}">${av.out ? "OUT" : av.label}</div>`;
 }
 
 function openPicker(team) {
@@ -1799,7 +1811,7 @@ function renderResults(game, stats, opts = {}) {
     el.className = "slot" + (p ? " filled" : "");
     place(el, i);
     el.innerHTML = p
-      ? `${isCap ? '<div class="cap-badge">C</div>' : ""}
+      ? `${isCap ? '<div class="cap-badge">C</div>' : ""}${availDot(p, game.gw)}
          <div class="disc">${playerPhoto(p)}${teamBadge(S.teamsById[p.team])}</div>
          <div class="nameplate">${escapeHtml(p.name)}</div>
          ${res.pending
@@ -1824,11 +1836,15 @@ function renderResults(game, stats, opts = {}) {
       .join("");
     const ptsCls = res.total > 0 ? "pos" : res.total < 0 ? "neg" : "zero";
     const team = p ? S.teamsById[p.team] : null;
+    const av = p ? upcomingAvail(p, game.gw) : null;
+    const flag = av ? `<span class="avail ${av.out ? "out" : "doubt"}">${av.label}</span>` : "";
+    const news = av && av.news ? `<div class="player-news ${av.out ? "out" : "doubt"}">${escapeHtml(av.news)}</div>` : "";
     row.innerHTML = `
       ${p ? playerPhoto(p) : ""}
       <div class="result-main">
-        <div class="result-name">${p ? escapeHtml(p.name) : "(empty)"}${team ? teamBadge(team) : ""}${isCap ? '<span class="cap-tag">C</span>' : ""}</div>
+        <div class="result-name">${p ? escapeHtml(p.name) : "(empty)"}${team ? teamBadge(team) : ""}${isCap ? '<span class="cap-tag">C</span>' : ""}${flag}</div>
         <div class="result-role">${CAT_LABEL[cat]}${team ? " · " + team.name : ""}</div>
+        ${news}
         <div class="break-chips">${chips}</div>
       </div>
       <div class="result-pts ${ptsCls}">${res.pending ? "–" : res.total}</div>`;
