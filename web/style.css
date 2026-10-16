@@ -330,6 +330,14 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
   display: flex; align-items: center; justify-content: center;
   border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3);
 }
+.slot .avail-dot {
+  position: absolute; top: -5px; right: 6px; z-index: 3;
+  font-size: 9px; font-weight: 800; letter-spacing: .2px; line-height: 1;
+  padding: 3px 5px; border-radius: 999px; border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: help;
+}
+.slot .avail-dot.doubt { background: var(--gold); color: var(--ink); }
+.slot .avail-dot.out { background: #e5484d; color: #fff; }
 .slot.respin-select { cursor: pointer; }
 .slot.respin-select:hover .disc { box-shadow: 0 0 0 6px rgba(229, 72, 77, 0.45); border-color: #e5484d; }
 .slot.respin-out .disc {
