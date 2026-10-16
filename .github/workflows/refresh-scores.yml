@@ -54,14 +54,16 @@ jobs:
         run: |
           if git diff --quiet -- web/data; then
             echo "No score changes."
-            exit 0
+            # a manual run always republishes, so site changes merged to main go live
+            if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then exit 0; fi
+          else
+            git config user.name "spin-xi-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add web/data web/img data/raw/2627
+            git commit -q -m "Live FPL score refresh"
+            git pull -q --rebase origin main
+            git push -q origin HEAD:main
           fi
-          git config user.name "spin-xi-bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add web/data web/img data/raw/2627
-          git commit -q -m "Live FPL score refresh"
-          git pull -q --rebase origin main
-          git push -q origin HEAD:main
           # publish web/ as the gh-pages branch (same as deploy.bat)
           cd web
           git init -q -b gh-pages

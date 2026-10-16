@@ -47,7 +47,8 @@ Open pages reload the data every 5 minutes (or hit ↻ Refresh on the board).
 Expect scores to trail the real match by roughly 10-15 minutes; GitHub can
 start scheduled jobs late when it's busy.
 
-To run it by hand: GitHub → Actions → Refresh FPL scores → Run workflow.
+To run it by hand: GitHub → Actions → Refresh FPL scores → Run workflow. A manual run
+always republishes the site, so use it after merging a site change.
 
 Manual deploy from your PC still works:
 

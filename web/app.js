@@ -35,12 +35,31 @@ const FORMATIONS = {
               ["LM",11,47],["CM",37,52],["CM",63,52],["RM",89,47],["ST",50,20]],
 };
 
-// where a slot sits on the drawn pitch: pulled in from the touchlines and
-// spread so name/points plates never overlap the line behind
-function placeSlot(el, slot) {
-  const y = slot.y >= 90 ? 88 : 12 + (slot.y - 16) * (54 / 62);
-  el.style.left = 12 + slot.x * 0.76 + "%";
-  el.style.top = y + "%";
+// where each slot sits on the drawn pitch. Players are grouped into lines
+// (keeper, defence, midfield, attack; a 4-2-3-1 also has holding and
+// attacking midfield lines), each line sits on one row and its players are
+// spaced evenly, so cards never overlap whatever the screen width.
+const LINE_OF = { GK: "gk", CDM: "dm", LAM: "am", CAM: "am", RAM: "am" };
+const LINE_ORDER = ["fwd", "am", "mid", "dm", "def", "gk"];   // top to bottom
+function pitchLayout(slots) {
+  const lineOf = (s) => LINE_OF[s.role] || ROLES[s.role].cat.toLowerCase();
+  const lines = {};
+  slots.forEach((s, i) => (lines[lineOf(s)] ||= []).push(i));
+  const used = LINE_ORDER.filter((l) => lines[l]);
+  const pos = [];
+  used.forEach((l, k) => {
+    const top = 11 + (k * 77) / Math.max(1, used.length - 1);
+    const idx = lines[l].sort((a, b) => slots[a].x - slots[b].x);
+    idx.forEach((i, j) => { pos[i] = { left: 6 + ((j + 0.5) * 88) / idx.length, top }; });
+  });
+  const cols = Math.max(...used.map((l) => lines[l].length));
+  return { pos, cols, rows: used.length };
+}
+function layoutPitch(pitch, slots) {
+  const { pos, cols, rows } = pitchLayout(slots);
+  pitch.style.setProperty("--cols", cols);
+  pitch.classList.toggle("five-lines", rows > 4);   // e.g. 4-2-3-1: smaller cards
+  return (el, i) => { el.style.left = pos[i].left + "%"; el.style.top = pos[i].top + "%"; };
 }
 
 // no longer selectable, kept so saved teams from history still render
@@ -641,10 +660,11 @@ function renderPitch() {
   const pitch = $("pitch");
   pitch.innerHTML = `
     <div class="pen-box bottom"></div><div class="six-box bottom"></div>`;
-  for (const slot of S.game.slots) {
+  const place = layoutPitch(pitch, S.game.slots);
+  S.game.slots.forEach((slot, i) => {
     const el = document.createElement("div");
     el.className = "slot" + (slot.player ? " filled" : "");
-    placeSlot(el, slot);
+    place(el, i);
     if (slot.player) {
       const isCap = S.game.captain === slot.player.id;
       const pickingCaptain = filledCount() === 11;
@@ -674,7 +694,7 @@ function renderPitch() {
       }
     }
     pitch.appendChild(el);
-  }
+  });
 }
 
 function placePlayer(player, slot) {
@@ -1308,10 +1328,11 @@ function renderResults(game, stats, opts = {}) {
   // the team on a pitch, in the formation it was entered in
   const pitch = $("results-pitch");
   pitch.innerHTML = `<div class="pen-box bottom"></div><div class="six-box bottom"></div>`;
-  for (const { slot, p, res, isCap } of rows) {
+  const place = layoutPitch(pitch, rows.map((r) => r.slot));
+  rows.forEach(({ p, res, isCap }, i) => {
     const el = document.createElement("div");
     el.className = "slot" + (p ? " filled" : "");
-    placeSlot(el, slot);
+    place(el, i);
     el.innerHTML = p
       ? `${isCap ? '<div class="cap-badge">C</div>' : ""}
          <div class="disc">${playerPhoto(p)}${teamBadge(S.teamsById[p.team])}</div>
@@ -1321,7 +1342,7 @@ function renderResults(game, stats, opts = {}) {
            : `<div class="ptsplate${isCap ? " cap" : ""}">${res.total}</div>`}`
       : `<div class="disc">${ROLES[slot.role].cat}</div>`;
     pitch.appendChild(el);
-  }
+  });
 
   const list = $("results-list");
   list.innerHTML = "";

@@ -287,34 +287,38 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
 .six-box { position: absolute; left: 37%; width: 26%; height: 6%; border: 2px solid rgba(255,255,255,.5); pointer-events: none; }
 .six-box.bottom { bottom: 10px; border-bottom: none; }
 
+/* cards scale with the pitch: a line of --cols players always fits across */
+.pitch { container-type: inline-size; }
 .slot {
   position: absolute; transform: translate(-50%, -50%);
-  width: 88px; text-align: center; cursor: default; z-index: 2;
+  width: min(88px, calc(88cqw / var(--cols, 5) - 4px));
+  text-align: center; cursor: default; z-index: 2;
 }
 .slot .disc {
   position: relative;
-  width: 58px; height: 58px; margin: 0 auto; border-radius: 50%;
+  width: min(58px, 13.5cqw, 78%); aspect-ratio: 1; margin: 0 auto; border-radius: 50%;
   border: 2px dashed rgba(255,255,255,.8); background: rgba(0,0,0,.16);
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 12px; color: #fff; letter-spacing: 0.5px;
 }
+.pitch.five-lines .slot .disc { width: min(46px, 10cqw, 78%); }
 .slot.filled .disc { border: 2px solid #fff; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,.25); }
 .slot .disc .photo { width: 100%; height: 100%; }
 .slot .disc .badge-img {
-  position: absolute; right: -6px; bottom: -3px; width: 22px; height: 22px;
+  position: absolute; right: -6px; bottom: -3px; width: 38%; height: 38%;
   background: #fff; border-radius: 50%; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.3);
 }
 .slot .nameplate {
-  margin-top: 5px; font-size: 11px; font-weight: 700; color: var(--ink);
+  margin-top: 5px; font-size: clamp(9px, 2.7cqw, 11px); font-weight: 700; color: var(--ink);
   background: #fff; border-radius: 6px 6px 0 0; padding: 3px 5px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .slot .nameplate:last-child { border-radius: 6px; }
 .slot .ptsplate {
-  font-size: 12px; font-weight: 800; color: #fff; background: var(--ink);
-  border-radius: 0 0 6px 6px; padding: 2px 4px; font-variant-numeric: tabular-nums;
+  font-size: clamp(10px, 3cqw, 12px); font-weight: 800; color: #fff; background: var(--ink);
+  border-radius: 0 0 6px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 2px 4px; font-variant-numeric: tabular-nums;
 }
-.slot .ptsplate.pend { font-weight: 600; font-size: 10px; color: rgba(255,255,255,.75); background: var(--ink-3); }
+.slot .ptsplate.pend { font-weight: 600; font-size: clamp(9px, 2.5cqw, 10px); color: rgba(255,255,255,.75); background: var(--ink-3); }
 .slot .ptsplate.cap { background: var(--gold); color: var(--ink); }
 .slot .roleplate { margin-top: 3px; font-size: 10px; color: rgba(255,255,255,.9); font-weight: 700; letter-spacing: .5px; }
 .slot .cap-badge {
@@ -597,11 +601,8 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
   .season-summary { gap: 8px; }
   .stat-card { padding: 12px 14px; }
   .stat-card .num { font-size: 30px; }
-  .slot { width: 70px; }
-  .slot .disc { width: 46px; height: 46px; font-size: 10px; }
-  .slot .disc .badge-img { width: 18px; height: 18px; }
-  .slot .nameplate { font-size: 10px; padding: 2px 3px; }
-  .slot .ptsplate { font-size: 11px; }
+  .slot .disc { font-size: 10px; }
+  .slot .nameplate { padding: 2px 3px; }
   .board-faces { display: none; }
   .results-head .owner { font-size: 28px; }
 }
