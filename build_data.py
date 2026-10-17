@@ -6,6 +6,7 @@ every stat, position and bonus point matches fantasy.premierleague.com:
     python build_data.py fpl            # fetch the latest FPL data + rebuild (web/data/epl2627)
     python build_data.py fpl-transform  # rebuild from the snapshots in data/raw/2627
     python build_data.py fpl-due        # is a match on? (the scheduled refresh checks this)
+    python build_data.py fpl-next       # minutes until the next match window (0 = on now)
     python build_data.py fpl-assets     # save club badges + check which player photos exist
 
 Archived competitions, built from our own match-events files:
@@ -959,6 +960,27 @@ def fpl_refresh_due(raw=FPL_RAW, now=None):
     return False, "no match on"
 
 
+def fpl_minutes_to_match(raw=FPL_RAW, now=None):
+    """Minutes until the next match window opens (0 while one is on), or None
+    when no fixture is left. A window runs from 5 minutes before kick-off to
+    3 hours after, the same as fpl_refresh_due."""
+    from datetime import datetime, timedelta, timezone
+    now = now or datetime.now(timezone.utc)
+    fixtures = json.loads((raw / "fixtures.json").read_text(encoding="utf-8"))
+    best = None
+    for f in fixtures:
+        if not f.get("kickoff_time"):
+            continue
+        ko = datetime.fromisoformat(f["kickoff_time"].replace("Z", "+00:00"))
+        start, end = ko - timedelta(minutes=5), ko + timedelta(hours=3)
+        if start <= now <= end:
+            return 0
+        if start > now:
+            mins = int((start - now).total_seconds() // 60)
+            best = mins if best is None else min(best, mins)
+    return best
+
+
 def transform_fpl(raw=FPL_RAW, comp=FPL_COMP, season=FPL_SEASON):
     """Build the app data from FPL API snapshots (bootstrap, fixtures and
     per-gameweek live stats). Player ids, positions and every stat are FPL's
@@ -1086,6 +1108,9 @@ if __name__ == "__main__":
     elif cmd == "fpl-due":
         due, why = fpl_refresh_due()    # used by the scheduled GitHub job
         print(f"due={'true' if due else 'false'}  # {why}")
+    elif cmd == "fpl-next":
+        mins = fpl_minutes_to_match()   # used by the live-match GitHub job
+        print("none" if mins is None else mins)
     elif cmd == "fpl-transform":
         transform_fpl()                 # rebuild from the existing FPL snapshots
     elif cmd == "wc":
