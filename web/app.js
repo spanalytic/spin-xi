@@ -343,7 +343,7 @@ function validRespin(base, r) {
 // the team that counts for one player in a gameweek: { entry, base }, where
 // entry is the re-spun team when they used their re-spin, else the base
 function countedEntry(entries, gw) {
-  const mine = entries.filter((e) => e.gw === gw && e.picks && entryOnTime(e));
+  const mine = entries.filter((e) => e.gw === gw && e.picks && entryOnTime(e) && !e.beforeOpen);
   const base = mine.filter((e) => !e.respinOf).sort(byTs)[0];
   if (!base) return null;
   const respin = mine.filter((e) => e.respinOf === base.id).sort(byTs)[0];
@@ -364,8 +364,8 @@ function respinnable(gw) {
   return c.base;
 }
 
-// the gameweek open for entries: the next one whose first kick-off is still
-// ahead (falls back to the last gameweek once the season is over)
+// the next gameweek to take entries: the first one whose first kick-off is
+// still ahead (falls back to the last gameweek once the season is over)
 function liveRound() {
   const evs = S.core.events;
   return evs.find((e) => entriesOpen(e.gw)) || evs[evs.length - 1] || null;
@@ -377,6 +377,20 @@ function currentRound() {
   return started[started.length - 1] || null;
 }
 
+// the gameweek being played right now: kicked off, but FPL hasn't marked
+// its last match finished yet
+function inPlayRound() {
+  const ev = currentRound();
+  return ev && !ev.finished && S.core.fixtures.some((f) => f.gw === ev.gw) ? ev : null;
+}
+
+// new teams for a gameweek are taken from when the one before it has
+// finished until its own first kick-off
+function entriesOpenFor(gw) {
+  const playing = inPlayRound();
+  return entriesOpen(gw) && !(playing && playing.gw < gw);
+}
+
 function fmtDur(ms) {
   const m = Math.floor(ms / 60000);
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
@@ -386,8 +400,11 @@ function fmtDur(ms) {
 function renderLiveCard() {
   const lc = $("live-card");
   const fc = $("live-fixtures-card");
-  const ev = liveRound();
-  if (!ev) {
+  const playing = inPlayRound();
+  const ev = playing || liveRound();
+  if (playing) {
+    renderInPlayCard(lc, playing);
+  } else if (!ev) {
     fc.classList.add("hidden");
     lc.innerHTML = `
       <div class="hero-tag done">Premier League</div>
@@ -396,11 +413,18 @@ function renderLiveCard() {
       <button class="big-btn lime" id="live-play">Enter a team</button>`;
     $("live-play").addEventListener("click", () => goSetup());
     return;
+  } else {
+    renderEntryCard(lc, ev);
   }
+  renderFixturesCard(fc, ev);
+}
+
+// entries open (or the round is over): the countdown and the call to enter
+function renderEntryCard(lc, ev) {
   const dl = new Date(ev.deadline);
   const fmt = dl.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const diff = dl - Date.now();
-  const open = entriesOpen(ev.gw);
+  const open = entriesOpenFor(ev.gw);
   const cd = ev.finished
     ? "Round complete"
     : diff > 0 ? `Entries close in ${fmtDur(diff)}`
@@ -420,7 +444,67 @@ function renderLiveCard() {
   if (lv) lv.addEventListener("click", () => viewHistoryEntry(countedEntry(myEntries(), ev.gw).entry));
   const lr = $("live-respin");
   if (lr) lr.addEventListener("click", () => startRespin(respinnable(ev.gw)));
+}
 
+// the team that counts for this player in a gameweek: their signed-in entry,
+// or a team saved on this device when they aren't signed in
+function roundEntry(gw) {
+  if (signedIn()) return countedEntry(myEntries(), gw)?.entry || null;
+  return countedEntry(getHistory().filter(entryInSeason), gw)?.entry || null;
+}
+
+// a gameweek in play: the player's live score, or a way in if they have no team
+function renderInPlayCard(lc, ev) {
+  const short = ev.short || "GW " + ev.gw;
+  const fx = S.core.fixtures.filter((f) => f.gw === ev.gw);
+  const played = fx.filter((f) => f.hs !== null && f.hs !== undefined).length;
+  const next = S.core.events.find((e) => e.gw > ev.gw);
+  const entry = roundEntry(ev.gw);
+  const stats = gwStatsSync(ev.gw);
+  if (entry && !stats) {
+    loadGwStats(ev.gw).then(() => {
+      if (!$("screen-home").classList.contains("hidden")) renderLiveCard();
+    }).catch((e) => console.warn("stats load failed", e));
+  }
+  let body;
+  if (entry) {
+    const { total } = stats ? computeEntryScore(entry, stats) : { total: entry.score ?? 0 };
+    const unofficial = AUTH_ON && !signedIn();
+    body = `
+      <div class="live-score"><span class="num">${total}</span><span class="lbl">pts so far</span></div>
+      ${teamFaces(entry.picks, entry.captain, "faces live-faces")}
+      <div class="live-actions">
+        <button class="big-btn lime" id="live-view">View your ${short} team</button>
+        <button class="big-btn ghost" id="live-board">Leaderboard</button>
+      </div>
+      ${unofficial ? `<p class="respin-tip">This team is saved on this device as practice. <b>Sign in</b> to play for the leaderboard from ${next ? next.short || "GW " + next.gw : "the next gameweek"}.</p>` : ""}`;
+  } else {
+    const signIn = AUTH_ON && !signedIn();
+    body = `
+      <p class="hero-sub">You don't have a team in ${short}.${signIn ? " Sign in to see your scores, or follow the leaderboard." : " Follow the leaderboard while it's played."}</p>
+      <div class="live-actions">
+        ${signIn ? `<button class="big-btn lime" id="live-signin">Sign in</button>` : ""}
+        <button class="big-btn ${signIn ? "ghost" : "lime"}" id="live-board">View leaderboard</button>
+      </div>`;
+  }
+  lc.innerHTML = `
+    <img class="hero-art" src="img/logo.svg" alt="">
+    <div class="hero-tag"><span class="pulse"></span>In play</div>
+    <h1>${COMP_LABELS[S.comp]}<br>${ev.name}</h1>
+    <div class="hero-meta">
+      <span><b>${played} of ${fx.length}</b> matches played</span>
+      ${next ? `<span class="countdown">${next.short || "GW " + next.gw} entries open after the last match</span>` : ""}
+    </div>
+    ${body}`;
+  const lv = $("live-view");
+  if (lv) lv.addEventListener("click", () => viewHistoryEntry(entry));
+  const ls = $("live-signin");
+  if (ls) ls.addEventListener("click", openSignIn);
+  $("live-board").addEventListener("click", goBoard);
+}
+
+// the gameweek's fixtures and results
+function renderFixturesCard(fc, ev) {
   const fx = S.core.fixtures.filter((f) => f.gw === ev.gw);
   fc.classList.toggle("hidden", fx.length === 0);
   fc.innerHTML = `<h3>${ev.name} fixtures</h3><div class="live-fixtures">${fx.map((f) => {
@@ -584,8 +668,15 @@ function renderSetup(opts = {}) {
 
   $("setup-step-gw").classList.toggle("hidden", locked);
   $("gw-grid").classList.toggle("hidden", locked);
-  $("setup-closed-note").classList.toggle("hidden", !(locked && !entriesOpen(opts.lockedGw)));
-  const entered = locked && entriesOpen(opts.lockedGw) && countedEntry(myEntries(), opts.lockedGw);
+  const closed = locked && !entriesOpenFor(opts.lockedGw);
+  const playing = inPlayRound();
+  $("setup-closed-note").classList.toggle("hidden", !closed);
+  if (closed) {
+    $("setup-closed-note").textContent = entriesOpen(opts.lockedGw) && playing
+      ? `${gwLabel(opts.lockedGw)} entries open once ${playing.name}'s last match has finished, so this team will be practice only and won't appear on the leaderboard.`
+      : "Entries for this round closed at the first kick-off, so this team will be practice only and won't appear on the leaderboard.";
+  }
+  const entered = locked && !closed && countedEntry(myEntries(), opts.lockedGw);
   $("setup-practice-note").classList.toggle("hidden", !entered);
   $("setup-step-formation").textContent = locked
     ? `${gwLabel(opts.lockedGw)} — choose your formation`
@@ -1875,12 +1966,15 @@ async function finishGame() {
     entry.respinOf = respin.base.id;
     entry.respinSlot = respin.slot;
   }
+  // picked before the gameweek opened (the one before it is still being played)
+  const beforeOpen = !respin && entriesOpen(entry.gw) && !entriesOpenFor(entry.gw);
   const hist = getHistory();
   hist.push({
     id: entryId,
     ts: entry.ts,
     score: total,
     ...entry,
+    ...(beforeOpen && { beforeOpen: true }),
   });
   saveHistory(hist);
   S.game = null;
@@ -1891,8 +1985,10 @@ async function finishGame() {
   const note = document.createElement("div");
   note.className = "submit-note";
   $("results-head").appendChild(note);
-  if (!entriesOpen(entry.gw)) {
-    note.innerHTML = "Entries had closed for this round, so this is saved as a practice team and isn't on the leaderboard.";
+  if (!(respin ? entriesOpen(entry.gw) : entriesOpenFor(entry.gw))) {
+    note.innerHTML = beforeOpen
+      ? "Entries for this round haven't opened yet (they open once the current gameweek's last match has finished), so this is saved as a practice team and isn't on the leaderboard."
+      : "Entries had closed for this round, so this is saved as a practice team and isn't on the leaderboard.";
   } else if (practice) {
     note.innerHTML = `You'd already entered your ${escapeHtml(entry.label)} team, and the first one counts, so this is saved as a practice team.`;
   } else if (playerName()) {
