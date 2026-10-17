@@ -13,6 +13,10 @@ on:
         description: "Fetch even if no match is on"
         type: boolean
         default: true
+      test_email:
+        description: "Send me a test email (to EMAILS_TEST_TO)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -72,3 +76,36 @@ jobs:
             commit -q -m "Publish $(git -C .. rev-parse --short HEAD)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages
           echo "Published."
+
+      # re-spin reminders and gameweek results for players who opted in
+      # (mailer.py). Needs the FIREBASE_SERVICE_ACCOUNT and SMTP_* secrets;
+      # until EMAILS_LIVE is "true" only EMAILS_TEST_TO gets anything.
+      - name: Anything to email?
+        id: mail
+        if: ${{ !cancelled() }}
+        env:
+          SET_UP: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && secrets.SMTP_PASSWORD != '' }}
+        run: |
+          if [ "$SET_UP" != "true" ]; then echo "Emails aren't set up yet."; exit 0; fi
+          if [ "${{ inputs.test_email }}" = "true" ]; then
+            echo "due=test" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          out=$(python mailer.py due)
+          echo "$out"
+          echo "${out%% *}" >> "$GITHUB_OUTPUT"
+
+      - name: Send emails
+        if: ${{ !cancelled() && (steps.mail.outputs.due == 'true' || steps.mail.outputs.due == 'test') }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          EMAILS_LIVE: ${{ vars.EMAILS_LIVE }}
+          EMAILS_TEST_TO: ${{ vars.EMAILS_TEST_TO }}
+        run: |
+          if [ "${{ steps.mail.outputs.due }}" = "test" ]; then python mailer.py test; exit 0; fi
+          pip install -q "firebase-admin>=7,<8"
+          python mailer.py run

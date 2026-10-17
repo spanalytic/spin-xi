@@ -11,6 +11,10 @@
        re-spins (`respinOf`) and the one slot it changed (`respinSlot`).
      legacy/{slug}  { uid }  links a pre-sign-in leaderboard name (textdb)
                     to the account that claimed it, so old teams stay put.
+     prefs/{uid}    { emails, updated }  private: has the player opted in to
+                    re-spin reminders and results emails (mailer.py sends them)
+     unsubscribes/{code}  { at }  filed by an email's unsubscribe link; the
+                    email job matches the code to a player and turns emails off
    ================================================================ */
 
 const V = "12.19.0";
@@ -127,6 +131,33 @@ export async function submitEntry(entry) {
   }
   await fb.f.updateDoc(ref, new fb.f.FieldPath("entries", entry.id), value,
     "last", entry.id, "updated", fb.f.serverTimestamp());
+}
+
+// has the signed-in player asked for emails? true / false, or null if
+// they haven't chosen yet
+export async function getEmailPref() {
+  const user = currentUser();
+  if (!user) return null;
+  const snap = await fb.f.getDoc(fb.f.doc(fb.db, "prefs", user.uid));
+  return snap.exists() ? !!snap.data().emails : null;
+}
+
+export async function setEmailPref(on) {
+  const user = currentUser();
+  if (!user) throw new Error("not signed in");
+  await fb.f.setDoc(fb.f.doc(fb.db, "prefs", user.uid),
+    { emails: !!on, updated: fb.f.serverTimestamp() });
+}
+
+// an unsubscribe link was opened (no sign-in needed). Filing the same code
+// twice is refused by the rules, which still means it's filed.
+export async function fileUnsubscribe(code) {
+  try {
+    await fb.f.setDoc(fb.f.doc(fb.db, "unsubscribes", code), { at: fb.f.serverTimestamp() });
+  } catch (e) {
+    if (e.code !== "permission-denied") throw e;
+  }
+  if (currentUser()) await setEmailPref(false);
 }
 
 // link an old leaderboard name (textdb slug) to this account; first claim wins
