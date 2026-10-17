@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin XI — Premier League wheel game</title>
+<meta name="theme-color" content="#0b1320">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css?v=24">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" id="brand-home" title="Spin XI home">
+    <svg class="brand-logo" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<circle cx="32" cy="32" r="31.5" fill="#0b1320"/>
+<path d="M24.49 3.99A29 29 0 0 1 39.51 3.99L36.92 13.65A19 19 0 0 0 27.08 13.65Z" fill="#c6f432"/><path d="M39.51 3.99A29 29 0 0 1 52.51 11.49L45.44 18.56A19 19 0 0 0 36.92 13.65Z" fill="#1fc16b"/><path d="M52.51 11.49A29 29 0 0 1 60.01 24.49L50.35 27.08A19 19 0 0 0 45.44 18.56Z" fill="#c6f432"/><path d="M60.01 24.49A29 29 0 0 1 60.01 39.51L50.35 36.92A19 19 0 0 0 50.35 27.08Z" fill="#1fc16b"/><path d="M60.01 39.51A29 29 0 0 1 52.51 52.51L45.44 45.44A19 19 0 0 0 50.35 36.92Z" fill="#c6f432"/><path d="M52.51 52.51A29 29 0 0 1 39.51 60.01L36.92 50.35A19 19 0 0 0 45.44 45.44Z" fill="#1fc16b"/><path d="M39.51 60.01A29 29 0 0 1 24.49 60.01L27.08 50.35A19 19 0 0 0 36.92 50.35Z" fill="#c6f432"/><path d="M24.49 60.01A29 29 0 0 1 11.49 52.51L18.56 45.44A19 19 0 0 0 27.08 50.35Z" fill="#1fc16b"/><path d="M11.49 52.51A29 29 0 0 1 3.99 39.51L13.65 36.92A19 19 0 0 0 18.56 45.44Z" fill="#c6f432"/><path d="M3.99 39.51A29 29 0 0 1 3.99 24.49L13.65 27.08A19 19 0 0 0 13.65 36.92Z" fill="#1fc16b"/><path d="M3.99 24.49A29 29 0 0 1 11.49 11.49L18.56 18.56A19 19 0 0 0 13.65 27.08Z" fill="#c6f432"/><path d="M11.49 11.49A29 29 0 0 1 24.49 3.99L27.08 13.65A19 19 0 0 0 18.56 18.56Z" fill="#1fc16b"/>
+<circle cx="32" cy="32" r="19" fill="#0b1320"/>
+<circle cx="32" cy="32" r="29" fill="none" stroke="#0b1320" stroke-width="1.6"/>
+<text x="32" y="39.5" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',Arial,sans-serif" font-weight="800" font-size="21" fill="#ffffff" letter-spacing="0.5">XI</text>
+<path d="M27 0.5h10l-5 8z" fill="#ffc53d" stroke="#0b1320" stroke-width="1.4" stroke-linejoin="round"/>
+</svg>
+    <span class="brand-word">Spin <em>XI</em></span>
+    <span class="brand-season"></span>
+  </div>
+  <div class="comp-switch" id="comp-switch"></div>
+  <nav>
+    <button class="nav-tab" id="nav-home" data-screen="screen-home">Home</button>
+    <button class="nav-tab" id="nav-new" data-screen="screen-setup">Play</button>
+    <button class="nav-tab" id="nav-board" data-screen="screen-board">Leaderboard</button>
+    <button class="nav-tab" id="nav-howto" data-screen="screen-howto">How to play</button>
+    <button class="nav-tab nav-account hidden" id="nav-account">Sign in</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ============ HOME ============ -->
+  <section id="screen-home" class="screen">
+    <div id="live-card" class="hero"></div>
+    <div id="live-fixtures-card" class="fixtures-card hidden"></div>
+    <div class="season-summary" id="season-summary"></div>
+    <div class="history-wrap">
+      <div class="section-head"><h2>Your teams</h2></div>
+      <div id="history-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ SETUP ============ -->
+  <section id="screen-setup" class="screen hidden">
+    <div id="signin-gate" class="name-gate signin-panel hidden"></div>
+    <div id="name-gate" class="name-gate hidden">
+      <img src="img/logo.svg" alt="">
+      <h2>Welcome to Spin XI</h2>
+      <p>What should we call you? Your name goes on the leaderboard with every team you enter.</p>
+      <div class="name-gate-row">
+        <input id="gate-name" maxlength="20" placeholder="Your name">
+        <button class="big-btn" id="gate-continue">Continue →</button>
+      </div>
+    </div>
+    <div id="setup-closed-note" class="closed-note hidden">Entries for this round closed at the
+      first kick-off — this team will be practice only and won't appear on the leaderboard.</div>
+    <div id="setup-practice-note" class="closed-note hidden">You've already entered your team for this
+      gameweek. Only your first team counts, so another one is practice. Use your re-spin from the
+      Home page if you earned one.</div>
+    <h2 class="setup-step" id="setup-step-gw">1 · Choose a gameweek</h2>
+    <div id="gw-grid" class="gw-grid"></div>
+    <h2 class="setup-step" id="setup-step-formation">2 · Choose your formation</h2>
+    <div id="formation-grid" class="formation-grid"></div>
+    <div class="setup-actions">
+      <button class="big-btn" id="setup-start" disabled>Start Picking →</button>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="screen-game" class="screen hidden">
+    <div class="game-layout">
+      <div class="pitch-col">
+        <div class="game-status" id="game-status"></div>
+        <div id="captain-banner" class="captain-banner hidden"><span class="cap-tag">C</span> Tap a player to make them captain. They score double points.</div>
+        <div class="pitch" id="pitch"></div>
+      </div>
+      <div class="wheel-col">
+        <div class="spinner" id="spinner">
+          <div class="reel-band"></div>
+          <div class="reel-strip" id="reel-strip"></div>
+        </div>
+        <button class="big-btn" id="spin-btn">SPIN</button>
+        <div class="wheel-result" id="wheel-result"></div>
+        <button class="big-btn gold hidden" id="score-btn">Enter my Team</button>
+        <button class="text-btn" id="abandon-btn">Go Back</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LEADERBOARD ============ -->
+  <section id="screen-board" class="screen hidden">
+    <div class="board-head">
+      <h2>Leaderboard</h2>
+      <div class="board-name-row">
+        <input id="board-name" maxlength="20" placeholder="Your name">
+        <button class="nav-btn" id="board-name-save">Save name</button>
+        <button class="nav-btn sel hidden" id="board-signin">Sign in to join</button>
+        <button class="nav-btn" id="board-refresh">Refresh</button>
+      </div>
+    </div>
+    <div class="board-nav" id="board-nav"></div>
+    <div id="board-body"></div>
+  </section>
+
+  <!-- ============ HOW TO PLAY ============ -->
+  <section id="screen-howto" class="screen hidden">
+    <h2 class="howto-title">How to play</h2>
+    <div class="howto-grid">
+      <div class="howto-card">
+        <h3><span class="n">1</span>Spin &amp; pick your XI</h3>
+        <ol>
+          <li>Hit <b>Play</b> on the next gameweek and choose a formation.</li>
+          <li><b>SPIN</b> the reel — it lands on a random team. Teams can come up more than once.</li>
+          <li>Pick any player from that team — they fill the next open slot for their position
+              (GK / DEF / MID / FWD). Each player can only be picked once.</li>
+          <li>Nobody fits your remaining slots? Spin again.</li>
+          <li>Repeat until your XI is complete.</li>
+        </ol>
+      </div>
+      <div class="howto-card">
+        <h3><span class="n">2</span>Captain &amp; enter</h3>
+        <ol>
+          <li>Tap a player on the pitch to make them <b>captain</b> — they score
+              <b>double points</b> (negatives too!). You can change your mind until you enter the team.</li>
+          <li><b>Enter my Team</b> saves it and posts it to the Leaderboard under your name
+              (set your name on the Leaderboard tab first).</li>
+          <li>One team per gameweek: your <b>first</b> team is the one that counts. Any more are practice.
+              Entries open once the previous gameweek's last match has finished and close at the gameweek's first kick-off.</li>
+          <li><b>Enter early, earn a re-spin.</b> If your team is in at least 12 hours before the deadline,
+              you can re-spin once, any time before kick-off: tap one player to drop, spin, and pick a
+              replacement from the club it lands on. Handy when the team news comes out.</li>
+          <li>On the <b>Season</b> board, your team in each gameweek counts towards your total.</li>
+          <li>Points appear as the real matches finish — a <b>live</b> tag means games are still to be played
+              and the score will keep updating.</li>
+        </ol>
+      </div>
+    </div>
+    <h3 class="howto-sub">Scoring — official Fantasy Premier League points</h3>
+    <table class="score-table">
+      <tr><th>Action</th><th>Points</th></tr>
+      <tr><td>Playing up to 60 minutes (excluding stoppage time)</td><td>1</td></tr>
+      <tr><td>Playing 60 minutes or more</td><td>2</td></tr>
+      <tr><td>Goal by a goalkeeper / defender / midfielder / forward</td><td>10 / 6 / 5 / 4</td></tr>
+      <tr><td>Assist</td><td>3</td></tr>
+      <tr><td>Clean sheet — goalkeeper or defender (60+ mins)</td><td>4</td></tr>
+      <tr><td>Clean sheet — midfielder</td><td>1</td></tr>
+      <tr><td>Every 3 saves by a goalkeeper</td><td>1</td></tr>
+      <tr><td>Penalty save</td><td>5</td></tr>
+      <tr><td>Penalty miss</td><td>-2</td></tr>
+      <tr><td>Every 2 goals conceded — goalkeeper or defender</td><td>-1</td></tr>
+      <tr><td>Defensive contribution — 10+ clearances, blocks, interceptions &amp; tackles (defender)
+          or 12+ incl. recoveries (midfielder / forward)</td><td>2</td></tr>
+      <tr><td>Bonus — the top 3 players in each match on FPL's Bonus Points System</td><td>3 / 2 / 1</td></tr>
+      <tr><td>Yellow card</td><td>-1</td></tr>
+      <tr><td>Red card</td><td>-3</td></tr>
+      <tr><td>Own goal</td><td>-2</td></tr>
+      <tr><td><b>Captain</b> — all points doubled</td><td>×2</td></tr>
+    </table>
+    <p class="howto-note">Every stat, position (GK / DEF / MID / FWD) and bonus point comes straight
+      from fantasy.premierleague.com, so each player scores exactly what they score in FPL.
+      In a double gameweek both matches count.</p>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="screen-results" class="screen hidden">
+    <div class="results-head" id="results-head"></div>
+    <div class="results-layout">
+      <div class="pitch" id="results-pitch"></div>
+      <div id="results-list"></div>
+    </div>
+    <div class="results-actions">
+      <button class="big-btn" id="results-again">Enter Another Team</button>
+      <button class="nav-btn" id="results-home">Back to Home</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ PLAYER PICKER MODAL ============ -->
+<div id="modal-backdrop" class="hidden">
+  <div id="picker-modal">
+    <div class="picker-head" id="picker-head"></div>
+    <div class="picker-body" id="picker-body"></div>
+  </div>
+</div>
+
+<!-- ============ SIGN-IN MODAL ============ -->
+<div id="auth-backdrop" class="hidden">
+  <div id="auth-modal" class="signin-panel"></div>
+</div>
+
+<script src="firebase-config.js?v=15"></script>
+<script src="app.js?v=24"></script>
+</body>
+</html>
