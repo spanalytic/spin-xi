@@ -673,3 +673,12 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
 }
 .email-opt input { width: 18px; height: 18px; flex: none; margin-top: 1px; accent-color: var(--brand); }
 .submit-note .email-opt { margin: 10px 0 0; max-width: none; color: var(--muted); }
+
+/* in-play gameweek: the player's live score */
+.live-score { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; position: relative; }
+.live-score .num { font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1; color: var(--lime); }
+.live-score .lbl { color: rgba(255, 255, 255, 0.72); font-size: 15px; font-weight: 600; }
+.live-faces { display: flex; margin-bottom: 20px; position: relative; }
+.live-faces .photo { width: 34px; height: 34px; border: 2px solid var(--ink); margin-right: -8px; }
+.big-btn.ghost { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: none; }
+.big-btn.ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }

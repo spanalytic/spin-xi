@@ -117,14 +117,23 @@ emails to `mail-preview/` without sending anything.
 
 ## Updating during the season
 
-Scores refresh automatically. The **Refresh FPL scores** GitHub Action
-(`.github/workflows/refresh-scores.yml`) wakes every 10 minutes and, while a
-match is on, fetches the latest stats from FPL, rebuilds, and republishes the
-site when anything changed. After a gameweek it checks hourly until FPL
-confirms the final points, and once a day it picks up rescheduled fixtures.
+Scores refresh automatically, in two GitHub Actions:
+
+- **Live match scores** (`.github/workflows/live-scores.yml`) covers matches.
+  GitHub runs scheduled jobs late or skips them when busy (on GW7 the
+  10-minute schedule only fired every ~4 hours), so this job doesn't depend on
+  frequent ticks: the first one that lands within 6 hours of a kick-off stays
+  alive, refreshes every 5 minutes through each match window (kick-off to 3
+  hours after), and hands over to a fresh run when it nears GitHub's 6-hour
+  limit with matches still to come. Scores trail the real match by about
+  5-10 minutes.
+- **Refresh FPL scores** (`.github/workflows/refresh-scores.yml`) does the
+  hourly jobs between matches: injury news, rescheduled fixtures, and
+  checking until FPL confirms a gameweek's final points.
+
 Open pages reload the data every 5 minutes (or hit ↻ Refresh on the board).
-Expect scores to trail the real match by roughly 10-15 minutes; GitHub can
-start scheduled jobs late when it's busy.
+To kick off live updates by hand: GitHub → Actions → Live match scores → Run
+workflow.
 
 To run it by hand: GitHub → Actions → Refresh FPL scores → Run workflow. A manual run
 always republishes the site, so use it after merging a site change.
