@@ -315,16 +315,22 @@ function entryOnTime(e) {
 }
 
 /* one team per player per gameweek: the first one entered on time counts.
-   A team entered at least 12 hours before the deadline earns one re-spin:
-   swap one player for a pick from a fresh spin, any time until kick-off. */
-const RESPIN_EARLY_MS = 12 * 60 * 60 * 1000;
+   A team entered at least 12 hours before the deadline earns one re-spin,
+   and one entered at least 3 days before earns two: each swaps one player
+   for a pick from a fresh spin, any time until kick-off. */
+const HOUR_MS = 60 * 60 * 1000;
+const RESPIN_TIERS = [{ before: 72 * HOUR_MS, count: 2 }, { before: 12 * HOUR_MS, count: 1 }];
+const RESPIN_EARLY_MS = RESPIN_TIERS[RESPIN_TIERS.length - 1].before;
 const byTs = (a, b) => (a.ts || 0) - (b.ts || 0);
 
-function respinEarned(base) {
-  return (base.ts || 0) <= roundDeadline(base.gw) - RESPIN_EARLY_MS;
+// how many re-spins a first team earned, from when it was entered
+function respinsEarned(base) {
+  const t = RESPIN_TIERS.find((r) => (base.ts || 0) <= roundDeadline(base.gw) - r.before);
+  return t ? t.count : 0;
 }
+const respinWord = (n) => (n === 1 ? "one re-spin" : n === 2 ? "two re-spins" : `${n} re-spins`);
 
-// is `r` a fair re-spin of `base`: entered on time, base early enough, the
+// is `r` a fair re-spin of `base` (the team before it): entered on time, the
 // same team except one slot (refilled with a player of that position), and
 // the captain kept unless the captain was the player replaced
 function validRespin(base, r) {
@@ -333,21 +339,34 @@ function validRespin(base, r) {
   const slot = (FORMATIONS[r.formation] || [])[i];
   const p = S.playersById[b[i]];
   if (r.gw !== base.gw || r.formation !== base.formation || !slot || !p) return false;
-  if (!respinEarned(base) || !entryOnTime(r) || (r.ts || 0) < (base.ts || 0)) return false;
+  if (!entryOnTime(r) || (r.ts || 0) < (base.ts || 0)) return false;
   if (a.length !== 11 || b.length !== 11 || a.includes(b[i])) return false;
   if (b.some((id, k) => k !== i && id !== a[k])) return false;
   if (TYPE_CAT[p.type] !== ROLES[slot[0]].cat) return false;
   return base.captain === a[i] ? b.includes(r.captain) : r.captain === base.captain;
 }
 
-// the team that counts for one player in a gameweek: { entry, base }, where
-// entry is the re-spun team when they used their re-spin, else the base
+// the team that counts for one player in a gameweek: { entry, base, chain,
+// left }. Each re-spin names the team it re-spins, so the first team and its
+// re-spins form a chain; entry is the last valid link, within the number of
+// re-spins the first team earned, and left is how many are still unused
+// (a re-spin that was tried but isn't valid still uses one up)
 function countedEntry(entries, gw) {
   const mine = entries.filter((e) => e.gw === gw && e.picks && entryOnTime(e) && !e.beforeOpen);
   const base = mine.filter((e) => !e.respinOf).sort(byTs)[0];
   if (!base) return null;
-  const respin = mine.filter((e) => e.respinOf === base.id).sort(byTs)[0];
-  return { entry: respin && validRespin(base, respin) ? respin : base, base };
+  const earned = respinsEarned(base);
+  const chain = [base];
+  let used = 0;
+  while (used < earned) {
+    const cur = chain[chain.length - 1];
+    const next = mine.filter((e) => e.respinOf === cur.id).sort(byTs)[0];
+    if (!next) break;
+    used++;
+    if (!validRespin(cur, next)) break;
+    chain.push(next);
+  }
+  return { entry: chain[chain.length - 1], base, chain, earned, left: earned - used };
 }
 
 // the signed-in player's entries in the live competition
@@ -360,8 +379,7 @@ function respinnable(gw) {
   if (!entriesOpen(gw)) return null;
   const entries = myEntries();
   const c = countedEntry(entries, gw);
-  if (!c || !respinEarned(c.base) || entries.some((e) => e.respinOf === c.base.id)) return null;
-  return c.base;
+  return c && c.left > 0 ? c.entry : null;
 }
 
 // the next gameweek to take entries: the first one whose first kick-off is
@@ -525,16 +543,19 @@ function liveEntryHtml(ev) {
   const short = ev.short || "GW " + ev.gw;
   const c = countedEntry(myEntries(), ev.gw);
   if (!c) {
-    const early = roundDeadline(ev.gw) - RESPIN_EARLY_MS;
-    const tip = AUTH_ON && Date.now() < early
-      ? `<p class="respin-tip">Enter by <b>${new Date(early).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}</b> to earn a re-spin you can use right up to kick-off.</p>`
+    const tier = RESPIN_TIERS.find((t) => Date.now() < roundDeadline(ev.gw) - t.before);
+    const early = tier && roundDeadline(ev.gw) - tier.before;
+    const tip = AUTH_ON && tier
+      ? `<p class="respin-tip">Enter by <b>${new Date(early).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</b> to earn ${respinWord(tier.count)} you can use right up to kick-off.</p>`
       : "";
     return `<button class="big-btn lime" id="live-play">Enter your ${short} team</button>${tip}`;
   }
   const respin = respinnable(ev.gw);
-  const note = respin ? "You entered early, so you have <b>one re-spin</b>: swap one player for a pick from a fresh spin."
-    : respinEarned(c.base) ? "You've used your re-spin."
-    : "Teams entered 12+ hours before the deadline get a re-spin. Yours was entered later.";
+  const note = respin
+    ? (c.left < c.earned ? `You have <b>${respinWord(c.left)}</b> left`
+      : `You entered early, so you have <b>${respinWord(c.left)}</b>`) + ": swap one player for a pick from a fresh spin."
+    : c.earned ? `You've used your ${c.earned === 1 ? "re-spin" : "re-spins"}.`
+    : "Teams entered 12+ hours before the deadline get a re-spin (two if 3+ days early). Yours was entered later.";
   return `<div class="live-actions">
       <button class="big-btn lime" id="live-view">View your ${short} team</button>
       ${respin ? `<button class="big-btn gold" id="live-respin">Use your re-spin</button>` : ""}
@@ -553,7 +574,7 @@ function renderHome() {
     const c = countedEntry(hist, gw);
     if (!c) continue;
     counted.add(c.entry.id);
-    if (c.entry !== c.base) replaced.add(c.base.id);
+    for (const e of c.chain.slice(0, -1)) replaced.add(e.id);
   }
   const seasonTotal = hist.filter((h) => counted.has(h.id)).reduce((t, h) => t + h.score, 0);
 
@@ -1997,12 +2018,15 @@ async function finishGame() {
     lbSubmit(entry).then((ok) => {
       if (ok) {
         if (respin) setRespinMemo(respin.base.id, null);
+        const c = AUTH_ON ? countedEntry(myEntries(), entry.gw) : null;
+        const left = c && c.entry.id === entry.id ? c.left : 0;
         note.innerHTML = respin
           ? `Re-spin used. Your new team is on the leaderboard as <b>${escapeHtml(playerName())}</b>`
+            + (left ? `. You have ${respinWord(left)} left until kick-off.` : "")
           : `On the leaderboard as <b>${escapeHtml(playerName())}</b>`
-            + (AUTH_ON && respinEarned(entry) ? `. You entered early, so you have one re-spin until kick-off.` : "");
-        // an early team can be re-spun straight from here
-        const base = !respin && respinnable(entry.gw);
+            + (left ? `. You entered early, so you have ${respinWord(left)} until kick-off.` : "");
+        // a team with a re-spin left can be re-spun straight from here
+        const base = respinnable(entry.gw);
         if (base && base.id === entry.id) {
           note.innerHTML += ` <button class="nav-btn sel">Use your re-spin</button>`;
           note.querySelector("button").addEventListener("click", () => startRespin(base));

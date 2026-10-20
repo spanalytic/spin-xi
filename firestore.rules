@@ -5,7 +5,9 @@ rules_version = '2';
 // document, can add teams but never edit or delete them, and every team is
 // stamped with the server's time (so entries after the deadline show as late).
 // A re-spin is a new team that names the earlier team it re-spins and may
-// differ from it in that one slot only; the site checks the 12-hour rule.
+// differ from it in that one slot only. A team can be re-spun at most twice
+// (the second re-spin names the first); the site checks how early the first
+// team was entered (12 hours for one re-spin, 3 days for two).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -28,16 +30,23 @@ service cloud.firestore {
         && (('respinOf' in e) == ('respinSlot' in e));
     }
 
-    // a re-spin: same gameweek and formation as an earlier (non-re-spin)
-    // team of this player, with every pick kept except the re-spun slot
+    // a re-spin: same gameweek and formation as an earlier team of this
+    // player (their first team, or its first re-spin), with every pick kept
+    // except the re-spun slot
     function validRespin(e, before) {
       return e.respinOf is string && e.respinOf in before
+        && respinDepthOk(before[e.respinOf], before)
         && sameTeamButOne(e, before[e.respinOf]);
     }
 
-    function sameTeamButOne(e, b) {
+    // the team being re-spun is a first team, or a re-spin of a first team
+    function respinDepthOk(b, before) {
       return !('respinOf' in b)
-        && b.comp == e.comp && b.gw == e.gw && b.formation == e.formation
+        || (b.respinOf in before && !('respinOf' in before[b.respinOf]));
+    }
+
+    function sameTeamButOne(e, b) {
+      return b.comp == e.comp && b.gw == e.gw && b.formation == e.formation
         && e.respinSlot is int && e.respinSlot >= 0 && e.respinSlot <= 10
         && e.picks[e.respinSlot] != b.picks[e.respinSlot]
         && (e.respinSlot == 0 || e.picks[0] == b.picks[0])
