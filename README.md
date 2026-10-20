@@ -89,9 +89,9 @@ offered once on the results page after they enter a team). Nobody gets email
 without ticking it. The **Refresh FPL scores** job runs `mailer.py`, which
 sends, once per gameweek each:
 
-- a **re-spin reminder** 3 hours before the first kick-off, to players whose
-  team went in 12+ hours early and who haven't re-spun yet (with any
-  doubtful or injured players in their team);
+- a **re-spin reminder** 3 hours before the first kick-off, to players who
+  still have a re-spin left (saying how many, and flagging any doubtful or
+  injured players in their team);
 - their **results** once FPL confirms the gameweek's final points: score,
   place on the gameweek board, the season table, and each player's points.
 

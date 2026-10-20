@@ -35,6 +35,7 @@ import hmac
 import html
 import json
 import os
+import re
 import smtplib
 import sys
 import urllib.request
@@ -56,7 +57,18 @@ UK = ZoneInfo("Europe/London")
 
 FIRST_GW = 7                      # emails started in Gameweek 7
 REMIND_HOURS = 3                  # re-spin reminder this long before kick-off
-RESPIN_EARLY = timedelta(hours=12)
+
+
+def respin_tiers():
+    """[(how early, re-spins earned)], read from RESPIN_TIERS in app.js so the
+    two never disagree (12 hours -> 1 if app.js predates the tiers)."""
+    js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    tiers = [(timedelta(hours=int(h)), int(n)) for h, n in
+             re.findall(r"\{\s*before:\s*(\d+)\s*\*\s*HOUR_MS,\s*count:\s*(\d+)\s*\}", js)]
+    return sorted(tiers, reverse=True) or [(timedelta(hours=12), 1)]
+
+
+RESPIN_TIERS = respin_tiers()
 DEADLINE_GRACE = timedelta(minutes=10)   # same clock-skew allowance as the board
 RESULTS_FOR = timedelta(days=10)  # stop trying to send a gameweek's results after this
 
@@ -150,8 +162,8 @@ class Game:
     def on_time(self, e):
         return e["ts"] <= self.deadline(e["gw"]) + DEADLINE_GRACE
 
-    def respin_earned(self, base):
-        return base["ts"] <= self.deadline(base["gw"]) - RESPIN_EARLY
+    def respins_earned(self, base):
+        return next((n for before, n in RESPIN_TIERS if base["ts"] <= self.deadline(base["gw"]) - before), 0)
 
     def valid_respin(self, base, r):
         i = r.get("respinSlot")
@@ -162,7 +174,7 @@ class Game:
         if not isinstance(i, int) or not 0 <= i < len(cats) or len(a) != 11 or len(b) != 11:
             return False
         p = self.players.get(b[i])
-        if not p or not self.respin_earned(base) or not self.on_time(r) or r["ts"] < base["ts"]:
+        if not p or not self.on_time(r) or r["ts"] < base["ts"]:
             return False
         if b[i] in a or any(k != i and pid != a[k] for k, pid in enumerate(b)):
             return False
@@ -171,14 +183,27 @@ class Game:
         return r.get("captain") in b if base.get("captain") == a[i] else r.get("captain") == base.get("captain")
 
     def counted(self, entries, gw):
-        """(entry, base): the team that counts for a player in a gameweek."""
+        """The team that counts for a player in a gameweek, as countedEntry in
+        app.js: {entry, base, earned, left}. Each re-spin names the team it
+        re-spins, so the first team and its re-spins form a chain; entry is
+        its last valid link and left the re-spins still unused (a re-spin
+        that isn't valid still uses one up)."""
         mine = sorted((e for e in entries if e["gw"] == gw and e.get("picks") and self.on_time(e)),
                       key=lambda e: e["ts"])
         base = next((e for e in mine if not e.get("respinOf")), None)
         if not base:
             return None
-        respin = next((e for e in mine if e.get("respinOf") == base["id"]), None)
-        return (respin if respin and self.valid_respin(base, respin) else base), base
+        earned = self.respins_earned(base)
+        entry, used = base, 0
+        while used < earned:
+            nxt = next((e for e in mine if e.get("respinOf") == entry["id"]), None)
+            if not nxt:
+                break
+            used += 1
+            if not self.valid_respin(entry, nxt):
+                break
+            entry = nxt
+        return {"entry": entry, "base": base, "earned": earned, "left": earned - used}
 
     def score(self, entry):
         """(total, [(player, points, captain?)]) with the captain doubled."""
@@ -280,9 +305,9 @@ def board_rows(game, players, gws):
         for gw in sorted({e["gw"] for e in p["entries"]}):
             c = game.counted(p["entries"], gw)
             if c:
-                total, _ = game.score(c[0])
+                total, _ = game.score(c["entry"])
                 rows.append({"owner": owner, "name": p["name"], "gw": gw,
-                             "entry": c[0], "base": c[1], "total": total})
+                             "entry": c["entry"], "base": c["base"], "total": total})
     return rows
 
 
@@ -349,23 +374,30 @@ def wrap_html(title, body_html, button, unsub):
 </td></tr></table></body></html>"""
 
 
-def reminder_email(game, name, base, unsub):
-    gw = base["gw"]
+def respin_word(n):
+    return {1: "one re-spin", 2: "two re-spins"}.get(n, f"{n} re-spins")
+
+
+def reminder_email(game, name, c, unsub):
+    """c: the player's counted team (Game.counted) with re-spins left."""
+    team, gw, left = c["entry"], c["entry"]["gw"], c["left"]
     ko = kickoff_label(game.deadline(gw))
     flagged = []
-    for pid in base["picks"]:
+    for pid in team["picks"]:
         p = game.players.get(pid)
         f = game.upcoming_flag(p, gw)
         if f:
             flagged.append((p["name"], f[0], f[1]))
-    subject = f"Your Gameweek {gw} re-spin is still unused"
-    text = [f"Hi {name},", "",
-            f"You entered your Gameweek {gw} team early, so you've got one re-spin: drop a player, "
-            f"spin the wheel and pick a replacement from the club it lands on. "
-            f"It's yours until kick-off at {ko}."]
-    body = (f"<p>Hi {html.escape(name)},</p><p>You entered your Gameweek {gw} team early, so you've got "
-            f"<b>one re-spin</b>: drop a player, spin the wheel and pick a replacement from the club it lands on. "
-            f"It's yours until kick-off at <b>{html.escape(ko)}</b>.</p>")
+    have = (f"You've still got {respin_word(left)} left" if left < c["earned"]
+            else f"You entered your Gameweek {gw} team early, so you've got {respin_word(left)}")
+    subject = (f"Your Gameweek {gw} re-spin is still unused" if left == c["earned"] == 1
+               else f"You've got {respin_word(left)} left for Gameweek {gw}")
+    how = ("each one swaps a player for a pick from a fresh spin of the wheel" if left > 1 else
+           "drop a player, spin the wheel and pick a replacement from the club it lands on")
+    until = "They're" if left > 1 else "It's"
+    text = [f"Hi {name},", "", f"{have}: {how}. {until} yours until kick-off at {ko}."]
+    body = (f"<p>Hi {html.escape(name)},</p><p>{html.escape(have).replace(respin_word(left), f'<b>{respin_word(left)}</b>')}: "
+            f"{how}. {until} yours until kick-off at <b>{html.escape(ko)}</b>.</p>")
     if flagged:
         text += ["", "Worth a look in your team:"] + [f"  {n}: {s}. {news}".rstrip() for n, s, news in flagged]
         body += "<p>Worth a look in your team:</p><ul style='padding-left:18px'>" + "".join(
@@ -572,11 +604,10 @@ def run(now=None):
                 c = acc and game.counted(acc["entries"], r_gw)
                 if not c:
                     continue
-                base = c[1]
-                if not game.respin_earned(base) or any(e.get("respinOf") == base["id"] for e in acc["entries"]):
+                if c["left"] <= 0:
                     continue
                 unsub = unsub_url(secret, uid)
-                items.append((uid, email, reminder_email(game, acc["name"], base, unsub), unsub))
+                items.append((uid, email, reminder_email(game, acc["name"], c, unsub), unsub))
             print(f"GW{r_gw} re-spin reminder: {len(items)} eligible")
             send_batch(db, "reminder", r_gw, outbox, items)
         if res_gw:
@@ -618,7 +649,7 @@ def samples():
     unsub = f"{SITE}?unsubscribe={'x' * 32}"
     return unsub, {
         "results": results_email(game, "Thomas", rows[0], table, season, "me", unsub),
-        "reminder": reminder_email(game, "Thomas", me, unsub),
+        "reminder": reminder_email(game, "Thomas", {"entry": me, "base": me, "earned": 1, "left": 1}, unsub),
     }
 
 
