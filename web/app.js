@@ -1282,7 +1282,7 @@ const A = { mod: null, user: null, profile: null, failed: false, ready: Promise.
 
 function startAuth() {
   if (!AUTH_ON) return;
-  A.ready = import("./login.js?v=16")
+  A.ready = import("./login.js?v=17")
     .then((mod) => { A.mod = mod; return mod.start(window.SPINXI_FIREBASE, onAuthChange); })
     .catch((e) => { console.warn("sign-in unavailable", e); A.failed = true; renderAccount(); });
 }
@@ -1291,6 +1291,7 @@ function signedIn() { return !!(A.user && A.profile); }
 async function onAuthChange(user) {
   A.user = user;
   A.profile = null;
+  A.emailPref = undefined;    // loaded when first needed
   if (user) {
     try { A.profile = await setUpProfile(user); }
     catch (e) { console.warn("profile load failed", e); }
@@ -1418,7 +1419,9 @@ async function openSignIn() {
       <h2>${escapeHtml(A.profile.name)}</h2>
       <p>Signed in as ${escapeHtml(A.user.email || "your Google account")}.
         You can change your leaderboard name on the Leaderboard tab.</p>
+      ${emailOptHtml()}
       <button class="nav-btn" id="auth-signout">Sign out</button>`;
+    wireEmailOpt(box);
     $("auth-signout").addEventListener("click", async () => {
       await A.mod.signOut();
       closeSignIn();
@@ -1430,6 +1433,70 @@ async function openSignIn() {
   $("auth-backdrop").classList.remove("hidden");
 }
 function closeSignIn() { $("auth-backdrop").classList.add("hidden"); }
+
+/* ---------------- emails (opt-in) ----------------
+   Signed-in players can tick a box to get a re-spin reminder a few hours
+   before kick-off (when they have one left) and their results once FPL
+   confirms the gameweek. mailer.py, run by the scheduled GitHub job, sends
+   them. Every email has an unsubscribe link back to this page. */
+const EMAILS_LABEL = "Email me a reminder when I have a re-spin to use, and my results after each gameweek";
+
+function emailOptHtml() {
+  return `<label class="email-opt"><input type="checkbox" disabled> <span>${EMAILS_LABEL}</span></label>`;
+}
+
+// fill in the player's current choice and save it when the box changes
+async function wireEmailOpt(el) {
+  const box = el.querySelector(".email-opt input");
+  if (!box) return;
+  try {
+    if (A.emailPref === undefined) A.emailPref = await A.mod.getEmailPref();
+    box.checked = !!A.emailPref;
+    box.disabled = false;
+  } catch (e) {
+    console.warn("email choice load failed", e);
+    box.closest(".email-opt").remove();
+    return;
+  }
+  box.addEventListener("change", async () => {
+    box.disabled = true;
+    try {
+      await A.mod.setEmailPref(box.checked);
+      A.emailPref = box.checked;
+    } catch (e) {
+      console.warn("email choice save failed", e);
+      box.checked = !!A.emailPref;
+      alert("Couldn't save that. Check your connection and try again.");
+    }
+    box.disabled = false;
+  });
+}
+
+// arriving from an email's unsubscribe link (?unsubscribe=<code>)
+async function handleUnsubscribeLink() {
+  const code = new URLSearchParams(location.search).get("unsubscribe");
+  if (code === null) return;
+  history.replaceState(null, "", location.pathname);
+  await A.ready;
+  const box = $("auth-modal");
+  let ok = false;
+  if (A.mod && /^[A-Za-z0-9_-]{32}$/.test(code)) {
+    try { await A.mod.fileUnsubscribe(code); ok = true; }
+    catch (e) { console.warn("unsubscribe failed", e); }
+  }
+  if (ok && signedIn()) A.emailPref = false;
+  box.innerHTML = ok
+    ? `<img src="img/logo.svg" alt="">
+       <h2>You're unsubscribed</h2>
+       <p>You won't get any more Spin XI emails. To turn them back on, sign in and tick the box under your name (top right).</p>
+       <button class="nav-btn sel" id="unsub-ok">OK</button>`
+    : `<h2>That didn't work</h2>
+       <p>Couldn't process the unsubscribe link. Check your connection and open the link again,
+         or sign in and untick the email box under your name (top right).</p>
+       <button class="nav-btn sel" id="unsub-ok">OK</button>`;
+  $("unsub-ok").addEventListener("click", closeSignIn);
+  $("auth-backdrop").classList.remove("hidden");
+}
 
 function playerName() {
   if (AUTH_ON) return A.profile?.name || "";
@@ -2007,6 +2074,7 @@ async function finishGame() {
           note.innerHTML += ` <button class="nav-btn sel">Use your re-spin</button>`;
           note.querySelector("button").addEventListener("click", () => startRespin(base));
         }
+        offerEmails(note);
         if (!$("screen-home").classList.contains("hidden")) renderHome();
       } else {
         renderSubmitRetry(note, entry);
@@ -2023,6 +2091,18 @@ async function finishGame() {
       goBoard();
     });
   }
+}
+
+// players who haven't chosen yet get the email tick box under their result
+async function offerEmails(note) {
+  if (!signedIn()) return;
+  try { if (A.emailPref === undefined) A.emailPref = await A.mod.getEmailPref(); }
+  catch { return; }
+  if (A.emailPref !== null) return;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = emailOptHtml();
+  note.appendChild(wrap);
+  wireEmailOpt(wrap);
 }
 
 function renderSubmitRetry(note, entry) {
@@ -2154,6 +2234,7 @@ async function init() {
     }
   });
   goHome();
+  handleUnsubscribeLink();
 }
 
 init();

@@ -85,6 +85,28 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // a player's email choice: private to them. The email job (which runs
+    // with the Firebase admin key, so these rules don't apply to it) reads it
+    // to decide who gets re-spin reminders and gameweek results.
+    match /prefs/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['emails', 'updated'])
+        && request.resource.data.emails is bool
+        && request.resource.data.updated == request.time;
+      allow delete: if false;
+    }
+
+    // an unsubscribe link was opened: anyone holding the link's secret code
+    // can file it (no sign-in needed), and the email job turns that player's
+    // emails off before it next sends. Nobody can read these back.
+    match /unsubscribes/{code} {
+      allow create: if code.matches('[A-Za-z0-9_-]{32}')
+        && request.resource.data.keys().hasOnly(['at'])
+        && request.resource.data.at == request.time;
+      allow read, update, delete: if false;
+    }
+
     // old (pre-sign-in) leaderboard names, claimed once by one account
     match /legacy/{slug} {
       allow read: if true;

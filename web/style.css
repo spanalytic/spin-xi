@@ -667,6 +667,12 @@ h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
 .signin-msg.err { color: var(--red); }
 .signin-skip:hover { color: var(--text); }
 .signin-account { font-size: 14px; color: var(--muted); margin-bottom: 18px; }
+.email-opt {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; cursor: pointer;
+  max-width: 340px; margin: 0 auto 20px; font-size: 14px; color: var(--text); line-height: 1.4;
+}
+.email-opt input { width: 18px; height: 18px; flex: none; margin-top: 1px; accent-color: var(--brand); }
+.submit-note .email-opt { margin: 10px 0 0; max-width: none; color: var(--muted); }
 
 /* in-play gameweek: the player's live score */
 .live-score { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; position: relative; }

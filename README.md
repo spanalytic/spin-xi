@@ -81,6 +81,40 @@ the config.
 Locally: double-click `start.bat`, or run
 `python -m http.server 8317 --directory web` and open http://localhost:8317
 
+## Emails (re-spin reminders and results)
+
+Signed-in players can tick **"Email me a reminder when I have a re-spin to
+use, and my results after each gameweek"** (in the box under their name, and
+offered once on the results page after they enter a team). Nobody gets email
+without ticking it. The **Refresh FPL scores** job runs `mailer.py`, which
+sends, once per gameweek each:
+
+- a **re-spin reminder** 3 hours before the first kick-off, to players who
+  still have a re-spin left (saying how many, and flagging any doubtful or
+  injured players in their team);
+- their **results** once FPL confirms the gameweek's final points: score,
+  place on the gameweek board, the season table, and each player's points.
+
+Every email has an unsubscribe link (`?unsubscribe=<code>` on the site); the
+job turns that player's emails off before it next sends. Choices live in
+Firestore `prefs/{uid}` (private to the player) and email addresses come from
+Firebase Auth, so they're never on the public board.
+
+One-off setup (GitHub repo → **Settings → Secrets and variables → Actions**):
+
+| Name | Kind | Value |
+|---|---|---|
+| `FIREBASE_SERVICE_ACCOUNT` | secret | Firebase console → Project settings → Service accounts → **Generate new private key**; paste the whole JSON file |
+| `SMTP_USER` | secret | the Gmail address that sends |
+| `SMTP_PASSWORD` | secret | a Gmail **app password** for it (myaccount.google.com/apppasswords, needs 2-Step Verification) |
+| `EMAILS_TEST_TO` | variable | your own address: until emails go live, only this address gets anything |
+| `EMAILS_LIVE` | variable | `true` to send to every opted-in player |
+
+Another provider works too: set the `SMTP_HOST` / `SMTP_PORT` variables (and
+`MAIL_FROM` for the From line). To check the setup, run the workflow by hand
+with **Send me a test email** ticked. `python mailer.py preview` writes sample
+emails to `mail-preview/` without sending anything.
+
 ## Updating during the season
 
 Scores refresh automatically, in two GitHub Actions:

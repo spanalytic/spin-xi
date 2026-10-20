@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 node_modules
 *-debug.log
+mail-preview/
+mail-out/
