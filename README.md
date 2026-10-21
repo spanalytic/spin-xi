@@ -28,9 +28,9 @@ submitted automatically. The board has a page per gameweek (‹ › to browse)
 and a **Season** table that adds up each player's gameweeks. Each player gets
 **one team per gameweek**: the first one entered on time counts, and any more
 are saved as practice. A team entered **at least 12 hours before the deadline
-earns one re-spin**, usable any time until kick-off: the player taps one player
-to drop, spins, and picks a replacement (same position) from the club the wheel
-lands on. That offsets the edge late entrants get from team and injury news.
+earns one re-spin**, and one entered **at least 3 days before earns two**, usable
+any time until kick-off: the player taps one player to drop, spins, and picks a
+replacement (same position) from the club the wheel lands on. That offsets the edge late entrants get from team and injury news.
 Re-spins need sign-in, because eligibility is judged from the server's
 timestamp on the original team. Submissions store the *picks*, not the score — every
 viewer's browser recomputes points from the match data, so the board updates
@@ -47,8 +47,9 @@ passwords). Signed-in players' teams go into Firebase (Firestore) instead of
 textdb, follow them to any device, and are stamped with the server's clock so
 a team can't be backdated past the deadline. Nobody can edit or delete a team
 once it's entered, or write to anyone else's. A re-spin is stored as a new
-team that names the one it re-spins, and the rules only accept it if every
-other pick, the gameweek and the formation match that team. Playing without signing in still
+team that names the one it re-spins (a second re-spin names the first), and the
+rules only accept it if every other pick, the gameweek and the formation match
+that team. Playing without signing in still
 works as practice. Teams entered before sign-in existed stay on the board, and
 signing in on the browser that entered them links them to the account.
 
