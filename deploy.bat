@@ -19,5 +19,5 @@ git push origin main
 for /f %%i in ('git subtree split --prefix web HEAD') do set SPLIT=%%i
 git push -f origin %SPLIT%:gh-pages
 echo.
-echo Deployed to https://spanalytic.github.io/spin-xi/
+echo Deployed to https://spinxi.app/
 echo (GitHub Pages CDN can take a few minutes to refresh)
