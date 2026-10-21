@@ -14,9 +14,10 @@ games still open from history.
 
 ## Play it
 
-**Live site:** https://spanalytic.github.io/spin-xi/ (GitHub Pages, repo
+**Live site:** https://spinxi.app/ (GitHub Pages, repo
 `spanalytic/spin-xi`). Each player's teams/history live in their own browser
 (localStorage) — share the link and everyone plays independently.
+`web/CNAME` holds the custom domain, so every publish to gh-pages keeps it.
 
 The home page shows the next gameweek with a kick-off deadline and a Play
 button. Entries for a gameweek close at its first kick-off, then Play moves on
@@ -63,7 +64,7 @@ until then the site keeps the name-only textdb board. One-off setup:
    - enable **Email/Password**, then switch on **Email link (passwordless
      sign-in)**, Save.
 3. **Authentication → Settings → Authorized domains → Add domain**:
-   `spanalytic.github.io`.
+   `spinxi.app` (and `spanalytic.github.io`).
 4. **Build → Firestore Database → Create database** → Standard edition,
    location `europe-west2 (London)`, **production mode**.
 5. **Firestore → Rules**: replace everything with the contents of
