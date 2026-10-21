@@ -52,7 +52,7 @@ from build_data import CAT_BY_TYPE, score_row
 ROOT = Path(__file__).parent
 COMP = "epl2627"
 DATA = ROOT / "web" / "data" / COMP
-SITE = os.environ.get("SITE_URL") or "https://spanalytic.github.io/spin-xi/"
+SITE = os.environ.get("SITE_URL") or "https://spinxi.app/"
 UK = ZoneInfo("Europe/London")
 
 FIRST_GW = 7                      # emails started in Gameweek 7
