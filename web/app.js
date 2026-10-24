@@ -164,7 +164,7 @@ async function loadComp(comp) {
     for (const list of Object.values(playersByTeam)) {
       list.sort((a, b) => b.mins - a.mins);
     }
-    S.cores[comp] = { core, teamsById, playersById, playersByTeam };
+    S.cores[comp] = { core, teamsById, playersById, playersByTeam, loadedAt: Date.now() };
   }
   const c = S.cores[comp];
   S.comp = comp;
@@ -187,6 +187,15 @@ async function reloadData() {
   }
   await loadComp(comp);
   return true;
+}
+
+// a phone can keep a tab open for days without running timers, so before a
+// new team starts, fetch the data again if it's more than 5 minutes old
+// (injury news changes between gameweeks)
+async function refreshIfStale() {
+  const c = S.cores[S.comp];
+  if (!c || Date.now() - c.loadedAt < 5 * 60 * 1000) return;
+  try { await reloadData(); } catch (e) { console.warn("data reload failed", e); }
 }
 
 function renderCompSwitch() {
@@ -756,6 +765,7 @@ function roundWheelTeams(gw) {
 
 async function startGame() {
   const { gw, formation } = S.setup;
+  await refreshIfStale();
   await loadGwStats(gw);
   S.game = {
     gw, formation,
@@ -795,6 +805,7 @@ function setRespinMemo(baseId, value) {
 async function startRespin(base) {
   if (!base) return;
   if (entryComp(base) !== S.comp) await loadComp(entryComp(base));
+  await refreshIfStale();
   await loadGwStats(base.gw);
   S.game = {
     gw: base.gw,
