@@ -6,6 +6,8 @@
 <title>Spin XI — Premier League wheel game</title>
 <meta name="theme-color" content="#0b1320">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600;700;800&display=swap">
@@ -169,6 +171,7 @@
     <p class="howto-note">Every stat, position (GK / DEF / MID / FWD) and bonus point comes straight
       from fantasy.premierleague.com, so each player scores exactly what they score in FPL.
       In a double gameweek both matches count.</p>
+    <p class="howto-note"><a href="privacy.html">Privacy and deleting your account</a></p>
   </section>
 
   <!-- ============ RESULTS ============ -->
@@ -201,5 +204,6 @@
 
 <script src="firebase-config.js?v=15"></script>
 <script src="app.js?v=25"></script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});</script>
 </body>
 </html>
